@@ -27,7 +27,10 @@ DEFAULTS = {
     "web": {"host": "0.0.0.0", "port": 8090, "title": "KenTrackIt",
             "username": "admin", "password_hash": ""},
     "map": {"center": [-46.413, 168.353], "zoom": 12},
-    "display": {"stale_after_s": 60, "lost_after_s": 900, "speed_units": "kmh"},
+    "display": {"stale_after_s": 60, "lost_after_s": 900, "speed_units": "kmh", "trail_min": 30},
+    "alerts": {"overdue_min": 10, "speed_limit_kmh": 0, "status_watch": True,
+               "emergency_keywords": "emergency, emerg, man down"},
+    "reports": {"stop_min": 5, "stop_radius_m": 60},
     "tiles": {"source": "osm", "linz_key": "", "custom_url": "", "custom_attribution": "",
               "max_zoom": 18},
     "drop_bad_checksum": True,
@@ -217,6 +220,8 @@ def apply_patch(cfg, patch):
             if d["speed_units"] not in ("kmh", "knots"):
                 raise Invalid("Speed units must be kmh or knots")
             new["display"]["speed_units"] = d["speed_units"]
+        if "trail_min" in d:
+            new["display"]["trail_min"] = _num(d["trail_min"], 1, 1440, "Trail length", True)
         if new["display"]["lost_after_s"] <= new["display"]["stale_after_s"]:
             raise Invalid("'Lost after' must be longer than 'stale after'")
 
@@ -244,6 +249,24 @@ def apply_patch(cfg, patch):
             raise Invalid("LINZ aerial needs an API key (free from basemaps.linz.govt.nz)")
         if new["tiles"]["source"] == "custom" and not new["tiles"]["custom_url"]:
             raise Invalid("Enter a custom tile URL")
+
+    a = patch.get("alerts")
+    if a is not None:
+        if "overdue_min" in a:
+            new["alerts"]["overdue_min"] = _num(a["overdue_min"], 0, 1440, "Overdue after", True)
+        if "speed_limit_kmh" in a:
+            new["alerts"]["speed_limit_kmh"] = _num(a["speed_limit_kmh"], 0, 300, "Speed limit", True)
+        if "status_watch" in a:
+            new["alerts"]["status_watch"] = bool(a["status_watch"])
+        if "emergency_keywords" in a:
+            new["alerts"]["emergency_keywords"] = str(a["emergency_keywords"])[:300]
+
+    r = patch.get("reports")
+    if r is not None:
+        if "stop_min" in r:
+            new["reports"]["stop_min"] = _num(r["stop_min"], 1, 240, "Stop length", True)
+        if "stop_radius_m" in r:
+            new["reports"]["stop_radius_m"] = _num(r["stop_radius_m"], 15, 1000, "Stop radius", True)
 
     if "keep_days" in patch:
         new["keep_days"] = _num(patch["keep_days"], 0, 3650, "Keep history", True)

@@ -14,13 +14,30 @@
     <div class="leds">
       <span class="led" id="led-link" title="Radio serial link"><i></i>Link</span>
       <span class="led" id="led-chan" title="Channel activity"><i></i>Channel</span>
-      <a href="/settings" class="gear" title="Settings" aria-label="Settings">⚙</a>
     </div>
   </header>
+  <nav class="tools">
+    <button id="t-trails" class="tool" title="Show trails" aria-pressed="false">
+      <svg viewBox="0 0 24 24"><path d="M3 17c3-6 6 2 9-4s6-2 9-8"/><circle cx="21" cy="5" r="1.6"/></svg>Trails</button>
+    <button id="t-sound" class="tool" title="Alert sounds" aria-pressed="true">
+      <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="on" d="M16 8a5 5 0 0 1 0 8M18.5 5.5a8.5 8.5 0 0 1 0 13"/><path class="off" d="M16 9l5 6M21 9l-5 6"/></svg>Sound</button>
+    <button id="t-wall" class="tool" title="Wall display (full screen)">
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>Wall</button>
+    <a href="/reports" class="tool" title="Trip and stop reports">
+      <svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Reports</a>
+    <a href="/settings" class="tool" title="Settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</a>
+  </nav>
   <div id="display" class="display" title="What the monitor radio's display is showing">—</div>
 
-  <section id="units-sec">
-    <div class="sec-head"><h2>Units</h2><span id="unit-count" class="muted"></span></div>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="units" class="on">Units <span id="unit-count" class="count"></span></button>
+    <button role="tab" data-tab="zones">Zones <span id="zone-count" class="count"></span></button>
+    <button role="tab" data-tab="alerts">Alerts <span id="alert-count" class="badge" hidden></span></button>
+  </div>
+
+  <!-- Units -->
+  <section id="tab-units" class="tab">
     <input id="filter" type="search" placeholder="Filter units…" autocomplete="off">
     <ul id="units"></ul>
   </section>
@@ -35,7 +52,11 @@
       <dt>Last report</dt><dd id="d-seen"></dd>
       <dt>Speed / course</dt><dd id="d-motion"></dd>
       <dt>Position</dt><dd id="d-pos"></dd>
+      <dt>Zone</dt><dd id="d-zone"></dd>
     </dl>
+    <div class="row">
+      <button id="d-follow" aria-pressed="false">Follow</button>
+    </div>
     <form id="d-edit" class="row">
       <input id="d-alias" placeholder="Name (e.g. Truck 4)" maxlength="40">
       <input id="d-colour" type="color" title="Marker colour">
@@ -63,9 +84,49 @@
       <div id="p-info" class="muted"></div>
       <div class="row">
         <a id="p-csv" class="btn" href="#">Export CSV</a>
+        <a id="p-report" class="btn" href="#">Trip report</a>
         <button id="p-clear">Clear track</button>
       </div>
     </div>
+  </section>
+
+  <!-- Zones -->
+  <section id="tab-zones" class="tab" hidden>
+    <div class="row">
+      <button id="z-add-circle">+ Circle</button>
+      <button id="z-add-poly">+ Area</button>
+    </div>
+    <div id="z-hint" class="hint-box" hidden></div>
+    <form id="z-edit" hidden>
+      <label>Name <input id="z-name" maxlength="60" required placeholder="e.g. Depot"></label>
+      <div id="z-radius-wrap" class="row">
+        <label class="grow">Radius <span class="unit-in"><input id="z-radius" type="number" min="5" max="100000" step="any"> m</span></label>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="z-enter" checked> Alert on enter</label>
+        <label class="check"><input type="checkbox" id="z-exit" checked> Alert on leave</label>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="z-active" checked> Active</label>
+        <input id="z-colour" type="color" value="#2563eb" title="Zone colour">
+        <button type="button" id="z-redraw">Redraw shape</button>
+      </div>
+      <div class="row end">
+        <button type="button" id="z-delete" class="danger" hidden>Delete</button>
+        <button type="button" id="z-cancel">Cancel</button>
+        <button type="submit">Save zone</button>
+      </div>
+    </form>
+    <ul id="zones" class="plain"></ul>
+  </section>
+
+  <!-- Alerts -->
+  <section id="tab-alerts" class="tab" hidden>
+    <div class="row">
+      <span id="alerts-summary" class="muted grow"></span>
+      <button id="a-ack-all">Acknowledge all</button>
+    </div>
+    <ul id="alerts" class="plain"></ul>
   </section>
 
   <section id="log-sec">
@@ -73,8 +134,26 @@
     <ul id="log"></ul>
   </section>
 </aside>
-<main id="map"></main>
+
+<main id="map-wrap">
+  <div id="map"></div>
+  <div id="wallbar" hidden>
+    <span id="w-title"></span>
+    <span id="w-stats"></span>
+    <span id="w-clock"></span>
+    <button id="w-exit" title="Leave wall display">✕</button>
+  </div>
+  <div id="emergency" hidden role="alert">
+    <div class="em-icon">!</div>
+    <div class="em-text"><strong>EMERGENCY</strong><span id="em-detail"></span><span id="em-time"></span></div>
+    <button id="em-show">Show</button>
+    <button id="em-ack">Acknowledge</button>
+  </div>
+  <div id="toasts"></div>
+  <div id="sound-hint" hidden>Click anywhere to enable alert sounds</div>
+</main>
 <script src="/static/vendor/leaflet.js"></script>
+<script src="/static/sound.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

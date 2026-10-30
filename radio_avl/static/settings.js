@@ -84,6 +84,15 @@
     $("disp-stale").value = S.display.stale_after_s;
     $("disp-lost").value = Math.round(S.display.lost_after_s / 60);
     $("disp-speed").value = S.display.speed_units;
+    $("disp-trail").value = S.display.trail_min;
+  }
+  function fillAlerts() {
+    $("al-overdue").value = S.alerts.overdue_min;
+    $("al-speed").value = S.alerts.speed_limit_kmh;
+    $("al-keywords").value = S.alerts.emergency_keywords;
+    $("al-status").checked = !!S.alerts.status_watch;
+    $("rp-stopmin").value = S.reports.stop_min;
+    $("rp-radius").value = S.reports.stop_radius_m;
   }
   function fillData() {
     $("keep-days").value = S.keep_days;
@@ -204,7 +213,11 @@
       return p;
     },
     display: () => ({ display: { stale_after_s: +$("disp-stale").value,
-      lost_after_s: Math.round(+$("disp-lost").value * 60), speed_units: $("disp-speed").value } }),
+      lost_after_s: Math.round(+$("disp-lost").value * 60), speed_units: $("disp-speed").value,
+      trail_min: +$("disp-trail").value } }),
+    alerts: () => ({ alerts: { overdue_min: +$("al-overdue").value, speed_limit_kmh: +$("al-speed").value,
+      emergency_keywords: $("al-keywords").value, status_watch: $("al-status").checked } }),
+    reports: () => ({ reports: { stop_min: +$("rp-stopmin").value, stop_radius_m: +$("rp-radius").value } }),
     data: () => ({ keep_days: +$("keep-days").value, drop_bad_checksum: $("drop-bad").checked }),
   };
 
@@ -231,6 +244,10 @@
     };
   }
 
+  $("al-test").onclick = async () => {
+    if (!confirm("Raise a TEST emergency? Every open map screen will show the red banner and sound the alarm until someone acknowledges it.")) return;
+    try { await post("/api/alerts/test", {}); toast("Test emergency raised. Acknowledge it on the map."); } catch (e) { toast(e.message, true); }
+  };
   $("tile-clear").onclick = async () => {
     if (!confirm("Delete all saved map tiles? If the Pi is offline the map will be blank until it's back online.")) return;
     await post("/api/tiles/clear", {}); toast("Tile cache cleared"); refresh();
@@ -246,7 +263,7 @@
   };
 
   // ---- load ----------------------------------------------------------------------
-  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillData(); fillStatus(); }
+  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillAlerts(); fillData(); fillStatus(); }
   async function refresh() {
     try { SYS = await api("/api/system"); fillStatus(); } catch (e) { /* offline briefly */ }
   }

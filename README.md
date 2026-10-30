@@ -16,6 +16,15 @@ added once the poll command has been captured (see *Roadmap*).
   map then works offline
 - Corrects its own clock from GPS time if the Pi's clock is wrong (no RTC or NTP on site)
 - Logs sequence-counter gaps from the radio, which show if any serial data was lost
+- **Zones and alerts:** draw circles or areas on the map; alerts when units enter or leave,
+  stop reporting, or exceed a speed limit. Acknowledge them from the Alerts tab
+- **Emergencies:** red banner, pulsing marker and a repeating alarm on every open screen until
+  acknowledged. Triggered by words on the monitor radio's display (configurable); there's a
+  test button under Settings → Alerts
+- **Trip and stop reports** (`/reports`): fleet summary per day or range, then per unit a route
+  map, numbered stops (named by zone) and trips with distance and top speed. Print or CSV
+- **Dispatch screen:** trails (last N minutes), follow a unit, and a full-screen wall display
+  (`/?wall=1` opens straight into it, handy for a kiosk screen)
 - Settings page for every option (`/settings`, or the ⚙ on the map)
 - Plays nicely with other services on the same Pi: checks a web port is free before using it,
   lists the ports already taken, and picks the radio's serial adapter by its stable name
@@ -66,6 +75,26 @@ python3 -m radio_avl --config test.json --replay raw_20261030_152012.log
 Here `test.json` contains `{"data_dir": "test-data", "web": {"port": 8091}}`. Open port 8091
 afterwards. Add `--speed 10` to replay in (sped-up) real time. Parser tests:
 `python3 tests/test_kenwood.py`
+
+Simulated fleet (5 units driving around Invercargill, with stops, a speeding run, an overdue
+unit, a status change and an emergency):
+
+```bash
+PYTHONPATH=. python3 tools/simulate.py --hours 3 > demo.log
+python3 -m radio_avl --config test.json --replay demo.log
+```
+
+## Status and emergency messages: still to confirm
+
+We haven't captured a real status message or emergency yet. Until then KenTrackIt:
+
+- raises an emergency if the monitor radio's display shows any of the configured words, and
+  tries to match a unit ID in the text
+- raises a "status" alert whenever the unknown `$PKNDS` fields change for a unit (the last two
+  fields are likely status codes)
+
+Send a capture of each (`nxdn_listen.py` while someone presses the emergency button and sends a
+status) and the parsing can be made exact.
 
 ## Radio data format (from the 30/10/2026 capture)
 

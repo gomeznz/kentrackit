@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reports</title>
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/settings.css">
+<link rel="stylesheet" href="/static/reports.css">
+</head>
+<body class="settings reports">
+<div class="page wide">
+  <header class="top">
+    <a href="/" class="back no-print">← Map</a>
+    <h1><span id="r-title">KenTrackIt</span> trip report</h1>
+  </header>
+
+  <section class="card no-print" id="controls">
+    <div class="row seg" id="presets">
+      <button data-p="today">Today</button>
+      <button data-p="yesterday">Yesterday</button>
+      <button data-p="7d">Last 7 days</button>
+    </div>
+    <div class="ctl-grid">
+      <label>From <input type="date" id="r-from"></label>
+      <label>To <input type="date" id="r-to"></label>
+      <label>Unit <select id="r-unit"><option value="">All units</option></select></label>
+      <div class="ctl-btns">
+        <button id="r-run" class="primary">Show</button>
+        <a id="r-csv" class="btn" href="#">CSV</a>
+        <button id="r-print">Print</button>
+      </div>
+    </div>
+  </section>
+
+  <p id="r-period" class="period"></p>
+
+  <section class="card" id="fleet">
+    <h2>Fleet summary</h2>
+    <div class="totals" id="totals"></div>
+    <div class="table-wrap">
+      <table class="rep">
+        <thead><tr><th>Unit</th><th>First report</th><th>Last report</th><th class="n">Distance</th>
+          <th class="n">Moving</th><th class="n">Stopped</th><th class="n">Stops</th><th class="n">Trips</th><th class="n">Max speed</th></tr></thead>
+        <tbody id="fleet-rows"></tbody>
+      </table>
+    </div>
+    <p class="help no-print">Click a unit for its route, stops and trips.</p>
+  </section>
+
+  <section class="card" id="unit" hidden>
+    <h2 id="u-name"></h2>
+    <div class="totals" id="u-totals"></div>
+    <div id="u-map"></div>
+    <div class="table-wrap">
+      <table class="rep timeline">
+        <thead><tr><th></th><th>Start</th><th>End</th><th class="n">Duration</th><th>Where</th><th class="n">Distance</th><th class="n">Max speed</th></tr></thead>
+        <tbody id="u-rows"></tbody>
+      </table>
+    </div>
+  </section>
+  <p class="help foot">Stops are periods of at least <span id="r-stopmin">5</span> minutes within
+    <span id="r-stoprad">60</span> m (change under Settings → Reports). Distances are measured between
+    position reports, so they read a little short on winding roads.</p>
+</div>
+<script src="/static/vendor/leaflet.js"></script>
+<script src="/static/reports.js"></script>
+</body>
+</html>

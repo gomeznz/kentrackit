@@ -17,10 +17,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from . import config as config_mod
+from . import geo, reports
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 TILE_RE = re.compile(r"^/tiles/(\d{1,2})/(\d{1,7})/(\d{1,7})$")
 UNIT_RE = re.compile(r"^/api/units/([A-Za-z0-9_.-]{1,32})$")
+FENCE_RE = re.compile(r"^/api/geofences/(\d{1,9})$")
+ACK_RE = re.compile(r"^/api/alerts/(\d{1,12})/ack$")
+HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 class Broker:
@@ -249,6 +253,8 @@ def make_handler(app):
                 return self._static("index.html")
             if p in ("/settings", "/settings/"):
                 return self._static("settings.html")
+            if p in ("/reports", "/reports/"):
+                return self._static("reports.html")
             if p.startswith("/static/"):
                 return self._static(p[len("/static/"):])
             if p == "/api/config":
@@ -258,6 +264,7 @@ def make_handler(app):
                     "stale_after_s": cfg["display"]["stale_after_s"],
                     "lost_after_s": cfg["display"]["lost_after_s"],
                     "speed_units": cfg["display"]["speed_units"],
+                    "trail_min": cfg["display"]["trail_min"],
                     "tiles": app.tiles.enabled(),
                     "attribution": app.tiles.attribution,
                     "max_zoom": app.tiles.max_zoom,
@@ -268,11 +275,33 @@ def make_handler(app):
             if p == "/api/system":
                 return self._json(self._system())
             if p == "/api/units":
-                return self._json(app.store.units())
+                zones = app.alerts.unit_fences()
+                return self._json([dict(u, state={"fences": zones.get(u["id"], [])})
+                                   for u in app.store.units()])
             if p == "/api/track":
                 unit = qs.get("unit", [""])[0]
                 t0, t1 = self._range(qs)
                 return self._json(app.store.track(unit, t0, t1))
+            if p == "/api/geofences":
+                return self._json(app.store.geofences())
+            if p == "/api/alerts":
+                open_only = qs.get("open", ["0"])[0] == "1"
+                return self._json(app.store.alerts(open_only, int(qs.get("limit", [200])[0])))
+            if p == "/api/trails":
+                mins = min(int(qs.get("minutes", [cfg["display"]["trail_min"]])[0]), 1440)
+                t1 = app.now()
+                out = {}
+                for u in app.store.units():
+                    pts = app.store.track(u["id"], t1 - mins * 60, t1)
+                    if pts:
+                        out[u["id"]] = [[p["lat"], p["lon"], p["rx_time"]] for p in pts]
+                return self._json(out)
+            if p == "/api/report":
+                t0, t1 = self._range(qs)
+                unit = qs.get("unit", [""])[0] or None
+                return self._json(reports.fleet_report(app.store, t0, t1, cfg, unit))
+            if p == "/api/report.csv":
+                return self._report_csv(qs)
             if p == "/api/events":
                 return self._json(app.store.events(int(qs.get("limit", [100])[0])))
             if p == "/api/export.csv":
@@ -308,6 +337,19 @@ def make_handler(app):
                 port = int(body.get("port", 0) or 0)
                 mine = port == app.cfg["web"]["port"]
                 return self._json({"port": port, "free": mine or port_free(host, port), "mine": mine})
+            if p == "/api/geofences":
+                return self._save_fence(body, None)
+            m = FENCE_RE.match(p)
+            if m:
+                return self._save_fence(body, int(m.group(1)))
+            m = ACK_RE.match(p)
+            if m:
+                return self._ack([int(m.group(1))], body.get("note", ""))
+            if p == "/api/alerts/ack-all":
+                return self._ack(None, body.get("note", ""))
+            if p == "/api/alerts/test":
+                a = app.alerts.raise_alert("test", "TEST: emergency alarm test from the settings page")
+                return self._json(a)
             if p == "/api/tiles/clear":
                 app.tiles.clear()
                 return self._json({"ok": True})
@@ -327,6 +369,12 @@ def make_handler(app):
         def do_DELETE(self):
             if not self._authorised():
                 return
+            fm = FENCE_RE.match(urlparse(self.path).path)
+            if fm:
+                app.store.delete_geofence(int(fm.group(1)))
+                app.alerts.reload_fences()
+                app.broker.publish("geofences", app.store.geofences())
+                return self._json({"ok": True})
             m = UNIT_RE.match(urlparse(self.path).path)
             if not m:
                 return self._send(404, "Not found", "text/plain")
@@ -369,6 +417,65 @@ def make_handler(app):
             except OSError:
                 pass
             return st
+
+        def _save_fence(self, body, fid):
+            name = str(body.get("name", "")).strip()[:60]
+            shape = body.get("shape")
+            g = geo.valid_geometry(shape, body.get("geometry") or {})
+            if not name:
+                return self._json({"error": "Give the zone a name"}, 400)
+            if not g:
+                return self._json({"error": "Zone shape isn't valid (circle 5 m-100 km, or 3+ points)"}, 400)
+            colour = body.get("colour", "#2563eb")
+            f = {"name": name, "shape": shape, "geometry": g,
+                 "colour": colour if HEX_RE.match(str(colour)) else "#2563eb",
+                 "alert_enter": bool(body.get("alert_enter", True)),
+                 "alert_exit": bool(body.get("alert_exit", True)),
+                 "active": bool(body.get("active", True))}
+            saved = app.store.save_geofence(f, fid)
+            if not saved:
+                return self._json({"error": "No such zone"}, 404)
+            app.alerts.reload_fences()
+            app.broker.publish("geofences", app.store.geofences())
+            self._json(saved)
+
+        def _ack(self, ids, note):
+            done = app.store.ack_alerts(ids, str(note)[:200], t=app.now())
+            if done:
+                app.broker.publish("alert_ack", {"ids": done, "note": note})
+            self._json({"ok": True, "ids": done})
+
+        def _report_csv(self, qs):
+            t0, t1 = self._range(qs)
+            rep = reports.fleet_report(app.store, t0, t1, app.cfg)
+            out = io.StringIO()
+            w = csv.writer(out)
+            loc = lambda t: time.strftime("%Y-%m-%d %H:%M", time.localtime(t)) if t else ""
+            hm = lambda s: f"{int(s // 3600)}:{int(s % 3600 // 60):02d}"
+            w.writerow(["unit", "name", "first_report", "last_report", "distance_km", "moving_h:mm",
+                        "stopped_h:mm", "stops", "trips", "max_kmh"])
+            for r in rep["units"]:
+                w.writerow([r["unit"], r["name"], loc(r["first"]), loc(r["last"]), r["distance_km"],
+                            hm(r["moving_s"]), hm(r["stopped_s"]), len(r["stops"]), len(r["trips"]),
+                            r["max_kmh"]])
+            w.writerow([])
+            w.writerow(["unit", "name", "type", "start", "end", "duration_h:mm", "km", "max_kmh",
+                        "location / from", "to", "lat", "lon"])
+            for r in rep["units"]:
+                full = reports.unit_report(app.store, {"id": r["unit"], "alias": r["name"]}, t0, t1,
+                                           app.store.geofences(), app.cfg, with_track=False)
+                items = [("stop", s) for s in full["stops"]] + [("trip", x) for x in full["trips"]]
+                for kind, x in sorted(items, key=lambda i: i[1]["start"]):
+                    if kind == "stop":
+                        w.writerow([r["unit"], r["name"], "stop", loc(x["start"]), loc(x["end"]),
+                                    hm(x["duration_s"]), "", "", x["zone"], "", x["lat"], x["lon"]])
+                    else:
+                        w.writerow([r["unit"], r["name"], "trip", loc(x["start"]), loc(x["end"]),
+                                    hm(x["duration_s"]), x["km"], x["max_kmh"], x["from_zone"],
+                                    x["to_zone"], "", ""])
+            name = f"kentrackit_report_{time.strftime('%Y%m%d', time.localtime(t0))}.csv"
+            self._send(200, out.getvalue(), "text/csv",
+                       {"Content-Disposition": f'attachment; filename="{name}"'})
 
         def _static(self, rel):
             path = os.path.normpath(os.path.join(STATIC, rel))

@@ -118,10 +118,56 @@
     </div>
     <p class="help">KAS-20 currently polls about every 19 s, so 60 s stale gives a couple of
       missed polls before a unit changes colour.</p>
-    <label>Speed in
-      <select id="disp-speed"><option value="kmh">km/h</option><option value="knots">knots</option></select>
-    </label>
+    <div class="two">
+      <label>Speed in
+        <select id="disp-speed"><option value="kmh">km/h</option><option value="knots">knots</option></select>
+      </label>
+      <label>Trail length on the live map
+        <span class="unit-input"><input id="disp-trail" type="number" min="1" max="1440" required>minutes</span>
+      </label>
+    </div>
     <div class="actions"><button type="submit">Save</button></div>
+  </form>
+
+  <!-- Alerts -->
+  <form class="card" data-section="alerts">
+    <h2>Alerts</h2>
+    <p class="help">Zone alerts are set per zone on the map's <em>Zones</em> tab.</p>
+    <div class="two">
+      <label>Alert when a unit hasn't reported for
+        <span class="unit-input"><input id="al-overdue" type="number" min="0" max="1440" required>minutes (0 = off)</span>
+      </label>
+      <label>Speed limit
+        <span class="unit-input"><input id="al-speed" type="number" min="0" max="300" required>km/h (0 = off)</span>
+      </label>
+    </div>
+    <label>Emergency words on the radio's display
+      <input id="al-keywords" placeholder="emergency, emerg, man down">
+    </label>
+    <p class="help">If the monitor radio's display shows any of these (comma-separated, any case),
+      KenTrackIt raises an emergency: red banner and alarm until acknowledged. We still need a capture
+      of a real emergency to confirm what the radio shows.</p>
+    <label class="check"><input type="checkbox" id="al-status">
+      Alert when the unknown fields in a unit's GPS report change (helps identify status messages)</label>
+    <div class="actions">
+      <button type="button" id="al-test" class="danger">Test emergency alarm</button>
+      <button type="submit">Save</button>
+    </div>
+  </form>
+
+  <!-- Reports -->
+  <form class="card" data-section="reports">
+    <h2>Trip reports</h2>
+    <div class="two">
+      <label>A stop is at least
+        <span class="unit-input"><input id="rp-stopmin" type="number" min="1" max="240" required>minutes</span>
+      </label>
+      <label>within
+        <span class="unit-input"><input id="rp-radius" type="number" min="15" max="1000" required>metres</span>
+      </label>
+    </div>
+    <p class="help">GPS positions wander by up to 30 m even when parked, so keep the radius above about 40 m.</p>
+    <div class="actions"><a class="btn" href="/reports">Open reports</a><button type="submit">Save</button></div>
   </form>
 
   <!-- Units -->

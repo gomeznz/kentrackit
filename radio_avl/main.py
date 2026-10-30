@@ -16,13 +16,14 @@ import time
 
 from . import config as config_mod
 from . import kenwood
+from .alerts import AlertEngine
 from .store import Store
 from .web import Broker, TileCache, serve, rebind
 
 log = logging.getLogger("radio-avl")
 
 class App:
-    VERSION = "0.2"
+    VERSION = "0.3"
 
     def __init__(self, cfg, config_path=None, mode="serial"):
         self.cfg = cfg
@@ -31,6 +32,7 @@ class App:
         os.makedirs(cfg["data_dir"], exist_ok=True)
         self.store = Store(os.path.join(cfg["data_dir"], "avl.db"))
         self.broker = Broker()
+        self.alerts = AlertEngine(self)
         self.tiles = TileCache(cfg, cfg["data_dir"])
         self.servers = []
         self.auth_cache = set()
@@ -100,8 +102,9 @@ class App:
             rx_time = self._discipline_clock(d, rx_time)
             unit = self.store.add_position(d, rx_time)
             self.stats["positions"] += 1
+            zones = self.alerts.on_position(d, unit, rx_time)
             self.broker.publish("position", {
-                "unit": unit, "rx_time": rx_time, "valid": d["valid"],
+                "unit": unit, "rx_time": rx_time, "valid": d["valid"], "zones": zones["fences"],
                 "lat": d["lat"], "lon": d["lon"],
                 "speed_kn": d["speed_kn"], "course": d["course"]})
             log.info("unit %s %s %.5f,%.5f", d["unit"], "fix" if d["valid"] else "NO FIX",
@@ -113,6 +116,7 @@ class App:
                                             "t": rx_time}, sticky=True)
             if d["message"] and d["message"] not in ("Receive Data", "Complete"):
                 self.store.add_event("display", d["message"], None, rx_time)
+            self.alerts.on_display(d, rx_time)
         elif kind == "status":
             self.broker.publish("status", {"flags": d["flags"]}, sticky=True)
         elif kind in ("sentence", "unknown"):
@@ -199,11 +203,15 @@ class App:
         log.info("replay finished")
 
     def housekeeping(self):
-        while not self.stop.wait(3600):
+        last_prune = 0
+        while not self.stop.wait(30):
             try:
-                self.store.prune(self.cfg["keep_days"])
+                self.alerts.check_overdue()
+                if time.time() - last_prune > 3600:
+                    self.store.prune(self.cfg["keep_days"])
+                    last_prune = time.time()
             except Exception as e:
-                log.warning("prune: %s", e)
+                log.warning("housekeeping: %s", e)
 
 
 def main(argv=None):
