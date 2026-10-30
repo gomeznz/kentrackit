@@ -119,6 +119,12 @@
   $("r-run").onclick = run;
   $("r-unit").onchange = run;
   $("r-print").onclick = () => window.print();
+  $("most-active").onclick = (ev) => {
+    ev.preventDefault();
+    const w = window.open("/leaderboard", "kt-most-active",
+      `popup,left=0,top=0,width=${screen.availWidth},height=${screen.availHeight}`);
+    if (w) w.focus(); else location.href = "/leaderboard";      // popup blocked: open it here instead
+  };
 
   // Opened from the map's "Trip report" link: ?unit=&from=&to=
   const qs = new URLSearchParams(location.search);

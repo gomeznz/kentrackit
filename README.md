@@ -27,6 +27,9 @@ added once the poll command has been captured (see *Roadmap*).
   map, numbered stops (named by zone) and trips with distance and top speed. Print or CSV
 - **Dispatch screen:** trails (last N minutes), follow a unit, and a full-screen wall display
   (`/?wall=1` opens straight into it, handy for a kiosk screen)
+- **Most Active leaderboard** (🏆 button on Reports, opens full screen): podium and ranking of the
+  busiest units today / 7 / 30 days, by overall score, distance, time moving, talk time or calls.
+  "Auto" rotates through the rankings for a wall screen; arrow keys switch, F toggles full screen
 - **Channel activity** (`/channel`): every transmission logged (voice, data, polls) with
   duration and unit; airtime charts, busy-hours heatmap, per-unit airtime, CSV. Live **on air**
   indicator, and the talking unit pulses on the map. Stuck-carrier alert after 2 minutes

@@ -90,6 +90,29 @@ def unit_report(store, unit, t0, t1, fences, cfg, with_track=True):
     return rep
 
 
+def leaderboard(app, t0, t1, allowed=None):
+    """Who's been busiest: distance, time moving, talk time and calls per unit, plus an overall score
+    (the average of each measure as a share of the fleet's top unit for that measure)."""
+    rep = {r["unit"]: r for r in fleet_report(app.store, t0, t1, app.cfg, None, allowed)["units"]}
+    voice = app.channel.voice_by_unit(t0, t1)
+    rows = []
+    for u in app.store.units():
+        if allowed is not None and u["id"] not in allowed:
+            continue
+        r, v = rep.get(u["id"], {}), voice.get(u["id"], {})
+        rows.append({"id": u["id"], "name": u["alias"] or "Unit " + u["id"].lstrip("UuGg0"), "colour": u["colour"] or "",
+                     "distance_km": r.get("distance_km", 0.0), "moving_s": r.get("moving_s", 0),
+                     "talk_s": v.get("talk_s", 0.0), "calls": v.get("calls", 0),
+                     "stops": len(r.get("stops", [])), "reports": r.get("points", 0)})
+    keys = ("distance_km", "moving_s", "talk_s", "calls")
+    tops = {k: max([x[k] for x in rows] + [0]) for k in keys}
+    for x in rows:
+        parts = [x[k] / tops[k] for k in keys if tops[k] > 0]
+        x["score"] = round(100 * sum(parts) / len(keys), 1) if parts else 0.0
+    rows.sort(key=lambda x: (-x["score"], x["name"]))
+    return {"from": t0, "to": t1, "units": rows, "tops": tops}
+
+
 def fleet_report(store, t0, t1, cfg, unit_id=None, allowed=None):
     fences = store.geofences()
     units = [u for u in store.units() if (not unit_id or u["id"] == unit_id)

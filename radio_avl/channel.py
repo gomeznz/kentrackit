@@ -220,6 +220,14 @@ class Channel:
             "busy_now": self.busy, "busy_since": self.busy_since,
         }
 
+    def voice_by_unit(self, t0, t1):
+        """Talk time and number of calls per unit."""
+        with self.lock:
+            rows = self.db.execute("SELECT unit_id, SUM(MIN(end, ?) - MAX(start, ?)) talk, COUNT(*) calls FROM transmissions "
+                                   "WHERE kind='voice' AND unit_id IS NOT NULL AND end >= ? AND start <= ? GROUP BY unit_id",
+                                   (t1, t0, t0, t1)).fetchall()
+        return {r["unit_id"]: {"talk_s": round(r["talk"] or 0, 1), "calls": r["calls"]} for r in rows}
+
     def prune(self, cutoff):
         """Delete old transmissions; returns the recordings that belonged to them."""
         with self.lock, self.db:

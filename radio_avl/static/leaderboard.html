@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/static/logo-mark.svg">
+<meta name="theme-color" content="#071226">
+<title>Most Active</title>
+<link rel="stylesheet" href="/static/leaderboard.css">
+</head>
+<body>
+<div class="glow g1"></div><div class="glow g2"></div><div class="grid-bg"></div>
+<main class="board">
+  <header>
+    <div class="brand">
+      <img src="/static/logo-mark.svg" alt="">
+      <div>
+        <h1>Most Active</h1>
+        <div class="sub"><span id="site">KenTrackIt</span> · <span id="period"></span></div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="seg" id="ranges">
+        <button data-r="today">Today</button><button data-r="7">7 days</button><button data-r="30">30 days</button>
+      </div>
+      <button id="cycle" class="ghost" title="Rotate through the rankings every 15 seconds (for a wall screen)">⟳ Auto</button>
+      <button id="fs" class="ghost" title="Full screen (F)">⛶</button>
+      <div class="clock" id="clock"></div>
+    </div>
+  </header>
+
+  <nav class="metrics" id="metrics">
+    <button data-m="score"><b>🏆</b>Overall</button>
+    <button data-m="distance_km"><b>🛣</b>Distance</button>
+    <button data-m="moving_s"><b>⏱</b>Time moving</button>
+    <button data-m="talk_s"><b>🎙</b>Talk time</button>
+    <button data-m="calls"><b>📞</b>Calls</button>
+  </nav>
+
+  <section class="podium" id="podium"></section>
+  <ol class="ranks" id="ranks"></ol>
+  <p class="empty" id="empty" hidden>No activity in this period yet. Get out there!</p>
+  <footer id="foot"></footer>
+</main>
+<script src="/static/common.js"></script>
+<script src="/static/leaderboard.js"></script>
+</body>
+</html>

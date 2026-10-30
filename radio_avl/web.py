@@ -374,6 +374,8 @@ def make_handler(app):
                     else self._redirect("/account")
             if p in ("/reports", "/reports/"):
                 return self._static("reports.html") if self._need("reports") else None
+            if p in ("/leaderboard", "/leaderboard/"):
+                return self._static("leaderboard.html") if self._need("reports") else None
             if p in ("/channel", "/channel/"):
                 return self._static("channel.html") if self._need("reports") else None
             if p in ("/account", "/account/"):
@@ -522,6 +524,11 @@ def make_handler(app):
                                 r["kind"], r["unit_id"] or "", r["display"] or ""])
                 return self._send(200, out.getvalue(), "text/csv",
                                   {"Content-Disposition": f'attachment; filename="channel_log_{time.strftime("%Y%m%d", time.localtime(t0))}.csv"'})
+            if p == "/api/leaderboard":
+                if not self._need("reports"):
+                    return
+                t0, t1 = self._range(qs)
+                return self._json(reports.leaderboard(app, t0, t1, self._allowed_units()))
             if p == "/api/report.csv":
                 return self._report_csv(qs) if self._need("export") else None
             if p == "/api/export.csv":
