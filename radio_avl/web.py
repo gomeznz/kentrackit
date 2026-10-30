@@ -256,7 +256,9 @@ def make_handler(app):
             m = c.get(COOKIE)
             return m.value if m else None
 
-        def _identify(self):
+        def _identify(self, allow_basic=False):
+            """Session cookie first. HTTP Basic is only for scripts calling the API: browsers keep
+            sending remembered Basic credentials after sign-out, so pages never accept it."""
             self.user, self.token = None, None
             tok = self._token()
             if tok:
@@ -265,7 +267,7 @@ def make_handler(app):
                     self.user, self.token = u, tok
                     return
             hdr = self.headers.get("Authorization", "")
-            if hdr.startswith("Basic "):
+            if allow_basic and hdr.startswith("Basic ") and not self._token():
                 self.user = app.auth.basic_user(hdr, self._ip())
 
         def _redirect(self, where, headers=None):
@@ -284,7 +286,7 @@ def make_handler(app):
                 else:
                     self._redirect("/setup")
                 return False
-            self._identify()
+            self._identify(allow_basic=p.startswith(("/api/", "/tiles/")))
             if self.user:
                 return True
             if p.startswith(("/api/", "/tiles/")):
