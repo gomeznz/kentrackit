@@ -39,4 +39,5 @@ systemctl --no-pager --lines=5 status radio-avl || true
 
 PORT=$(python3 -c "import json;print(json.load(open('$CFG'))['web']['port'])")
 echo
-echo "Open http://$(hostname -I | awk '{print $1}'):$PORT/settings to finish setting up."
+echo "Open http://$(hostname -I | awk '{print $1}'):$PORT/ to finish setting up"
+echo "(a new install asks you to create the administrator account first)."

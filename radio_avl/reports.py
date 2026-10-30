@@ -90,9 +90,10 @@ def unit_report(store, unit, t0, t1, fences, cfg, with_track=True):
     return rep
 
 
-def fleet_report(store, t0, t1, cfg, unit_id=None):
+def fleet_report(store, t0, t1, cfg, unit_id=None, allowed=None):
     fences = store.geofences()
-    units = [u for u in store.units() if not unit_id or u["id"] == unit_id]
+    units = [u for u in store.units() if (not unit_id or u["id"] == unit_id)
+             and (allowed is None or u["id"] in allowed)]
     reps = [unit_report(store, u, t0, t1, fences, cfg, with_track=bool(unit_id)) for u in units]
     reps = [r for r in reps if r["points"]] if not unit_id else reps
     return {"from": t0, "to": t1, "units": reps,

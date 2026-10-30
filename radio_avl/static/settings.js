@@ -59,8 +59,6 @@
       const o = document.createElement("option"); o.value = o.textContent = S.web.host;
       $("web-host").appendChild(o); $("web-host").value = S.web.host;
     }
-    $("web-user").value = S.web.username; $("web-pass").value = "";
-    $("clear-pass-wrap").hidden = !S.web.password_set; $("web-clear-pass").checked = false;
     $("port-check").textContent = ""; $("port-check").className = "hint";
   }
 
@@ -134,7 +132,6 @@
     $("sys-data").textContent = s.data_dir;
 
     const w = [];
-    if (!S.web.password_set) w.push("No password is set: anyone on the network can open this page and change settings. Set one under Web access.");
     if (!s.config_writable) w.push(`The service can't write ${s.config_path}, so changes won't be kept. Re-run install.sh.`);
     $("warn").hidden = !w.length; $("warn").textContent = w.join(" ");
   }
@@ -206,11 +203,7 @@
       port: $("serial-port").value === "__custom" ? $("serial-custom").value.trim() : $("serial-port").value,
       baud: +$("serial-baud").value } }),
     web: () => {
-      const w = { title: $("web-title").value, port: +$("web-port").value, host: $("web-host").value,
-                  username: $("web-user").value };
-      if ($("web-clear-pass").checked) w.clear_password = true;
-      else if ($("web-pass").value) w.new_password = $("web-pass").value;
-      return { web: w };
+      return { web: { title: $("web-title").value, port: +$("web-port").value, host: $("web-host").value } };
     },
     map: () => {
       const t = { source: $("tile-source").value, custom_url: $("tile-url").value,
@@ -273,6 +266,83 @@
     }, 3000);
   };
 
+  // ---- users ----------------------------------------------------------------------
+  let USERS = null, ME = null, editing = null;
+  const unitLabel = (id) => { const u = USERS.units.find((x) => x.id === id); return u && u.alias ? `${u.alias} (${id})` : id; };
+  async function loadUsers() {
+    USERS = await api("/api/users");
+    const tb = $("user-rows"); tb.replaceChildren();
+    for (const u of USERS.users) {
+      const tr = document.createElement("tr"); if (!u.enabled) tr.className = "off";
+      const nm = document.createElement("td");
+      const b = document.createElement("div"); b.className = "uname"; b.textContent = u.display_name || u.username;
+      const s = document.createElement("div"); s.className = "usub"; s.textContent = u.username + (u.enabled ? "" : " · disabled") + (ME && u.id === ME.id ? " · you" : "");
+      nm.append(b, s);
+      const role = document.createElement("td"); role.textContent = u.role_label;
+      const un = document.createElement("td"); un.textContent = u.units === null ? "All" : u.units.length ? u.units.map(unitLabel).join(", ") : "None";
+      const last = document.createElement("td"); last.textContent = when(u.last_login);
+      const act = document.createElement("td"); act.className = "act";
+      const e = document.createElement("button"); e.textContent = "Edit"; e.onclick = () => openUser(u); act.appendChild(e);
+      tr.append(nm, role, un, last, act); tb.appendChild(tr);
+    }
+  }
+  function openUser(u) {
+    editing = u || null;
+    $("u-form").hidden = false; $("u-add-row").hidden = true;
+    $("u-form-title").textContent = u ? `Edit ${u.display_name || u.username}` : "New user";
+    $("uf-name").value = u ? u.display_name : ""; $("uf-user").value = u ? u.username : "";
+    $("uf-role").value = u ? u.role : "viewer";
+    $("uf-pass").value = ""; $("uf-pass").required = !u; $("uf-pass").placeholder = u ? "leave blank to keep" : "at least 8 characters";
+    $("uf-enabled").checked = u ? u.enabled : true;
+    const restricted = u && u.units !== null;
+    $("uf-all").checked = !restricted; $("uf-some").checked = restricted;
+    const box = $("uf-units"); box.replaceChildren();
+    if (!USERS.units.length) { const p = document.createElement("p"); p.className = "help"; p.textContent = "No units have reported yet."; box.appendChild(p); }
+    for (const x of USERS.units) {
+      const l = document.createElement("label"); l.className = "check";
+      const c = document.createElement("input"); c.type = "checkbox"; c.value = x.id; c.checked = restricted && u.units.includes(x.id);
+      l.append(c, document.createTextNode(" " + unitLabel(x.id))); box.appendChild(l);
+    }
+    box.hidden = !restricted;
+    $("uf-delete").hidden = !u || (ME && u.id === ME.id);
+    $("u-form").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    $("uf-name").focus();
+  }
+  const closeUser = () => { $("u-form").hidden = true; $("u-add-row").hidden = false; editing = null; };
+  $("uf-all").onchange = $("uf-some").onchange = () => { $("uf-units").hidden = !$("uf-some").checked; };
+  $("u-add").onclick = () => openUser(null);
+  $("uf-cancel").onclick = closeUser;
+  $("uf-delete").onclick = async () => {
+    if (!editing || !confirm(`Delete ${editing.display_name || editing.username}? They'll be signed out straight away.`)) return;
+    try { await api("/api/users/" + editing.id, { method: "DELETE" }); toast("User deleted"); closeUser(); loadUsers(); loadAudit(); }
+    catch (e) { toast(e.message, true); }
+  };
+  $("u-form").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const body = { display_name: $("uf-name").value.trim(), username: $("uf-user").value.trim(), role: $("uf-role").value,
+      enabled: $("uf-enabled").checked,
+      units: $("uf-some").checked ? [...$("uf-units").querySelectorAll("input:checked")].map((c) => c.value) : null };
+    if ($("uf-pass").value) body.password = $("uf-pass").value;
+    try {
+      await post("/api/users" + (editing ? "/" + editing.id : ""), body);
+      toast(editing ? "User updated" : "User added"); closeUser(); loadUsers(); loadAudit();
+    } catch (e) { toast(e.message, true); }
+  };
+
+  let auditLimit = 30;
+  async function loadAudit() {
+    const rows = await api("/api/audit?limit=" + auditLimit);
+    const ul = $("audit"); ul.replaceChildren();
+    for (const r of rows) {
+      const li = document.createElement("li");
+      const t = document.createElement("time"); t.textContent = when(r.rx_time);
+      const d = document.createElement("span"); d.textContent = r.detail;
+      li.append(t, d); ul.appendChild(li);
+    }
+    $("audit-more").hidden = rows.length < auditLimit;
+  }
+  $("audit-more").onclick = () => { auditLimit += 100; loadAudit(); };
+
   // ---- load ----------------------------------------------------------------------
   function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillAlerts(); fillData(); fillStatus(); }
   async function refresh() {
@@ -281,5 +351,8 @@
   [S, SYS] = await Promise.all([api("/api/settings"), api("/api/system")]);
   fillAll();
   fillUnits();
+  ME = await api("/api/me");
+  $("me-link").textContent = (ME.display_name || ME.username) + " ▾";
+  loadUsers(); loadAudit();
   setInterval(refresh, 5000);
 })();

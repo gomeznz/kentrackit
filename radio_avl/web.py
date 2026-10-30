@@ -1,5 +1,4 @@
 """HTTP server: UI, JSON API, settings, live updates (Server-Sent Events), tile cache."""
-import base64
 import csv
 import io
 import json
@@ -14,10 +13,12 @@ import threading
 import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from http.cookies import SimpleCookie
+from urllib.parse import urlparse, parse_qs, quote
 
 from . import config as config_mod
 from . import geo, reports
+from .auth import AuthError, ROLES, REMEMBER_S
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 TILE_RE = re.compile(r"^/tiles/(sat/)?(\d{1,2})/(\d{1,7})/(\d{1,7})$")
@@ -25,35 +26,64 @@ UNIT_RE = re.compile(r"^/api/units/([A-Za-z0-9_.-]{1,32})$")
 FENCE_RE = re.compile(r"^/api/geofences/(\d{1,9})$")
 ACK_RE = re.compile(r"^/api/alerts/(\d{1,12})/ack$")
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+USER_RE = re.compile(r"^/api/users/(\d{1,9})$")
+COOKIE = "kt_session"
+PUBLIC = {"/login", "/login/", "/setup", "/setup/", "/api/login", "/api/setup", "/api/auth-status"}
+PRIVATE_EVENTS = {"audit", "settings"}       # only administrators see these in the activity log
+
+
+def _safe_next(qs):
+    """Only redirect back to a path on this site after sign-in."""
+    n = qs.get("next", ["/"])[0]
+    return n if n.startswith("/") and not n.startswith("//") else "/"
+
+
+def _visible(user):
+    """Filter for the live event stream: hide units this user isn't allowed to see."""
+    if user["units"] is None:
+        return None
+    allowed = set(user["units"])
+
+    def ok(event, data):
+        if event in ("position",):
+            return data["unit"]["id"] in allowed
+        if event in ("unit", "unit_removed"):
+            return data["id"] in allowed
+        if event == "alert":
+            return data.get("unit_id") is None or data["unit_id"] in allowed
+        return True
+    return ok
 
 
 class Broker:
     """Fan-out of live events to connected browsers."""
 
     def __init__(self):
-        self.subs = set()
+        self.subs = {}                 # queue -> filter function (or None)
         self.lock = threading.Lock()
         self.state = {}          # last value of each sticky event (channel, link, display)
 
-    def subscribe(self):
+    def subscribe(self, allow=None):
         q = queue.Queue(maxsize=500)
         with self.lock:
-            self.subs.add(q)
+            self.subs[q] = allow
             for ev, data in self.state.items():
                 q.put_nowait((ev, data))
         return q
 
     def unsubscribe(self, q):
         with self.lock:
-            self.subs.discard(q)
+            self.subs.pop(q, None)
 
     def publish(self, event, data, sticky=False):
         payload = json.dumps(data)
         with self.lock:
             if sticky:
                 self.state[event] = payload
-            subs = list(self.subs)
-        for q in subs:
+            subs = list(self.subs.items())
+        for q, allow in subs:
+            if allow and not allow(event, data):
+                continue
             try:
                 q.put_nowait((event, payload))
             except queue.Full:
@@ -213,26 +243,86 @@ def make_handler(app):
             except ValueError:
                 return None
 
-        def _authorised(self):
-            web = app.cfg["web"]
-            if not web.get("password_hash"):
-                return True
+        # ---- identity and access ---------------------------------------
+        def _ip(self):
+            return self.client_address[0]
+
+        def _token(self):
+            c = SimpleCookie()
+            try:
+                c.load(self.headers.get("Cookie", ""))
+            except Exception:
+                return None
+            m = c.get(COOKIE)
+            return m.value if m else None
+
+        def _identify(self):
+            self.user, self.token = None, None
+            tok = self._token()
+            if tok:
+                u = app.auth.session_user(tok)
+                if u:
+                    self.user, self.token = u, tok
+                    return
             hdr = self.headers.get("Authorization", "")
-            if hdr in app.auth_cache:
-                return True
             if hdr.startswith("Basic "):
-                try:
-                    user, _, pw = base64.b64decode(hdr[6:]).decode().partition(":")
-                except ValueError:
-                    user = pw = ""
-                if user == web["username"] and config_mod.check_password(pw, web["password_hash"]):
-                    if len(app.auth_cache) > 50:
-                        app.auth_cache.clear()
-                    app.auth_cache.add(hdr)
-                    return True
-            self._send(401, "Login required", "text/plain",
-                       {"WWW-Authenticate": f'Basic realm="{web["title"]}"'})
+                self.user = app.auth.basic_user(hdr, self._ip())
+
+        def _redirect(self, where, headers=None):
+            h = {"Location": where}
+            h.update(headers or {})
+            self._send(302, b"", "text/plain", h)
+
+        def _gate(self, p):
+            """Sign-in check. Returns True if the request may continue."""
+            self.user = None
+            if p.startswith("/static/") or p in PUBLIC:
+                return True
+            if app.auth.needs_setup():
+                if p.startswith(("/api/", "/tiles/")):
+                    self._json({"error": "First-time setup needed", "setup": True}, 403)
+                else:
+                    self._redirect("/setup")
+                return False
+            self._identify()
+            if self.user:
+                return True
+            if p.startswith(("/api/", "/tiles/")):
+                self._json({"error": "Sign in required"}, 401)
+            else:
+                self._redirect("/login?next=" + quote(self.path, safe=""))
             return False
+
+        def _need(self, perm):
+            if app.auth.can(self.user, perm):
+                return True
+            self._json({"error": "You don't have permission to do that"}, 403)
+            return False
+
+        def _same_origin(self):
+            """Browsers send Origin on POST/DELETE; refuse requests from other sites."""
+            origin = self.headers.get("Origin")
+            if not origin or origin == "null":
+                return origin is None
+            return urlparse(origin).netloc == self.headers.get("Host", "")
+
+        def _cookie(self, token, max_age=None):
+            parts = [f"{COOKIE}={token}", "Path=/", "HttpOnly", "SameSite=Strict"]
+            if max_age is not None:
+                parts.append(f"Max-Age={max_age}")
+            if self.headers.get("X-Forwarded-Proto", "") == "https":
+                parts.append("Secure")
+            return "; ".join(parts)
+
+        def _who(self):
+            u = self.user
+            return (u["display_name"] or u["username"]) if u else "-"
+
+        def _sees(self, unit_id):
+            return app.auth.sees(self.user, unit_id)
+
+        def _allowed_units(self):
+            return None if self.user["units"] is None else set(self.user["units"])
 
         def _range(self, qs):
             now = app.now()
@@ -245,21 +335,41 @@ def make_handler(app):
             self.do_GET()
 
         def do_GET(self):
-            if not self._authorised():
-                return
             u = urlparse(self.path)
             qs = parse_qs(u.query)
             p = u.path
+            if not self._gate(p):
+                return
             cfg = app.cfg
 
+            # pages
+            if p in ("/login", "/login/"):
+                self._identify()
+                if self.user:
+                    return self._redirect(_safe_next(qs))
+                return self._static("login.html")
+            if p in ("/setup", "/setup/"):
+                return self._static("setup.html") if app.auth.needs_setup() else self._redirect("/")
             if p == "/":
                 return self._static("index.html")
             if p in ("/settings", "/settings/"):
-                return self._static("settings.html")
+                return self._static("settings.html") if app.auth.can(self.user, "settings") \
+                    else self._redirect("/account")
             if p in ("/reports", "/reports/"):
-                return self._static("reports.html")
+                return self._static("reports.html") if self._need("reports") else None
+            if p in ("/account", "/account/"):
+                return self._static("account.html")
             if p.startswith("/static/"):
                 return self._static(p[len("/static/"):])
+
+            # identity
+            if p == "/api/auth-status":
+                return self._json({"title": cfg["web"]["title"], "setup": app.auth.needs_setup()})
+            if p == "/api/me":
+                return self._json(app.auth.public(self.user))
+
+            if not self._need("view"):
+                return
             if p == "/api/config":
                 return self._json({
                     "title": cfg["web"]["title"],
@@ -268,6 +378,7 @@ def make_handler(app):
                     "lost_after_s": cfg["display"]["lost_after_s"],
                     "speed_units": cfg["display"]["speed_units"],
                     "trail_min": cfg["display"]["trail_min"],
+                    "reports": cfg["reports"],
                     "tiles": app.tiles.enabled(),
                     "attribution": app.tiles.attribution,
                     "max_zoom": app.tiles.max_zoom,
@@ -275,45 +386,40 @@ def make_handler(app):
                     "sat_attribution": app.sat_tiles.attribution,
                     "sat_max_zoom": app.sat_tiles.max_zoom,
                     "now": app.now(),
+                    "user": app.auth.public(self.user),
                 })
-            if p == "/api/settings":
-                return self._json(config_mod.public(cfg))
-            if p == "/api/system":
-                return self._json(self._system())
             if p == "/api/units":
                 zones = app.alerts.unit_fences()
-                return self._json([dict(u, state={"fences": zones.get(u["id"], [])})
-                                   for u in app.store.units()])
+                return self._json([dict(x, state={"fences": zones.get(x["id"], [])})
+                                   for x in app.store.units() if self._sees(x["id"])])
             if p == "/api/track":
                 unit = qs.get("unit", [""])[0]
+                if not self._sees(unit):
+                    return self._json({"error": "You don't have access to that unit"}, 403)
                 t0, t1 = self._range(qs)
                 return self._json(app.store.track(unit, t0, t1))
             if p == "/api/geofences":
                 return self._json(app.store.geofences())
             if p == "/api/alerts":
                 open_only = qs.get("open", ["0"])[0] == "1"
-                return self._json(app.store.alerts(open_only, int(qs.get("limit", [200])[0])))
+                rows = app.store.alerts(open_only, int(qs.get("limit", [200])[0]) * 3)
+                return self._json([a for a in rows if self._sees(a["unit_id"])][:int(qs.get("limit", [200])[0])])
             if p == "/api/trails":
                 mins = min(int(qs.get("minutes", [cfg["display"]["trail_min"]])[0]), 1440)
                 t1 = app.now()
                 out = {}
-                for u in app.store.units():
-                    pts = app.store.track(u["id"], t1 - mins * 60, t1)
+                for x in app.store.units():
+                    if not self._sees(x["id"]):
+                        continue
+                    pts = app.store.track(x["id"], t1 - mins * 60, t1)
                     if pts:
-                        out[u["id"]] = [[p["lat"], p["lon"], p["rx_time"]] for p in pts]
+                        out[x["id"]] = [[q["lat"], q["lon"], q["rx_time"]] for q in pts]
                 return self._json(out)
-            if p == "/api/report":
-                t0, t1 = self._range(qs)
-                unit = qs.get("unit", [""])[0] or None
-                return self._json(reports.fleet_report(app.store, t0, t1, cfg, unit))
-            if p == "/api/report.csv":
-                return self._report_csv(qs)
             if p == "/api/events":
-                return self._json(app.store.events(int(qs.get("limit", [100])[0])))
-            if p == "/api/export.csv":
-                return self._export(qs)
-            if p == "/api/backup.db":
-                return self._backup()
+                admin = app.auth.can(self.user, "settings")
+                rows = app.store.events(int(qs.get("limit", [100])[0]) * 3)
+                rows = [e for e in rows if (admin or e["kind"] not in PRIVATE_EVENTS) and self._sees(e["unit_id"])]
+                return self._json(rows[:int(qs.get("limit", [100])[0])])
             if p == "/api/stream":
                 return self._stream()
             m = TILE_RE.match(p)
@@ -323,72 +429,206 @@ def make_handler(app):
                 if data is None:
                     return self._send(404, b"", "text/plain")
                 return self._send(200, data, _sniff(data), {"Cache-Control": "max-age=604800"})
+
+            if p == "/api/report":
+                if not self._need("reports"):
+                    return
+                t0, t1 = self._range(qs)
+                unit = qs.get("unit", [""])[0] or None
+                if unit and not self._sees(unit):
+                    return self._json({"error": "You don't have access to that unit"}, 403)
+                return self._json(reports.fleet_report(app.store, t0, t1, cfg, unit, self._allowed_units()))
+            if p == "/api/report.csv":
+                return self._report_csv(qs) if self._need("export") else None
+            if p == "/api/export.csv":
+                return self._export(qs) if self._need("export") else None
+
+            if p == "/api/settings":
+                return self._json(config_mod.public(cfg)) if self._need("settings") else None
+            if p == "/api/system":
+                return self._json(self._system()) if self._need("settings") else None
+            if p == "/api/backup.db":
+                if not self._need("backup"):
+                    return
+                app.auth.audit(self.user, "downloaded a database backup")
+                return self._backup()
+            if p == "/api/users":
+                if not self._need("users"):
+                    return
+                return self._json({"users": [app.auth.public(x) for x in app.auth.users()],
+                                   "roles": {k: v["label"] for k, v in ROLES.items()},
+                                   "units": [{"id": x["id"], "alias": x["alias"]} for x in app.store.units()]})
+            if p == "/api/audit":
+                if not self._need("users"):
+                    return
+                rows = app.store.events(2000)
+                return self._json([e for e in rows if e["kind"] in ("audit", "settings")][:int(qs.get("limit", [300])[0])])
             self._send(404, "Not found", "text/plain")
 
         def do_POST(self):
-            if not self._authorised():
-                return
             p = urlparse(self.path).path
+            if not self._same_origin():
+                return self._json({"error": "Cross-site request refused"}, 403)
+            if not self._gate(p):
+                return
             body = self._body()
             if body is None:
                 return self._json({"error": "Bad request"}, 400)
 
+            # ---- sign in / out / first-time setup
+            if p == "/api/login":
+                try:
+                    token, u = app.auth.login(body.get("username", ""), body.get("password", ""),
+                                              bool(body.get("remember")), self._ip(),
+                                              self.headers.get("User-Agent", ""))
+                except AuthError as e:
+                    time.sleep(0.5)
+                    return self._json({"error": str(e)}, 401)
+                age = REMEMBER_S if body.get("remember") else None
+                self.send_response(200)
+                out = json.dumps({"ok": True, "user": app.auth.public(u)}).encode()
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(out)))
+                self.send_header("Set-Cookie", self._cookie(token, age))
+                self.end_headers()
+                self.wfile.write(out)
+                return
+            if p == "/api/setup":
+                if not app.auth.needs_setup():
+                    return self._json({"error": "Setup has already been done"}, 409)
+                try:
+                    u = app.auth.save_user({"username": body.get("username"), "display_name": body.get("display_name", ""),
+                                            "password": body.get("password"), "role": "admin"})
+                except AuthError as e:
+                    return self._json({"error": str(e)}, 400)
+                app.auth.audit(u, "created the first administrator account")
+                return self._json({"ok": True})
+            if p == "/api/logout":
+                self._identify()
+                if self.token:
+                    app.auth.logout(self.token)
+                    app.auth.audit(self.user, "signed out")
+                return self._send(200, b'{"ok": true}', "application/json",
+                                  {"Set-Cookie": self._cookie("", 0)})
+            if p == "/api/me/password":
+                try:
+                    app.auth.change_own_password(self.user, body.get("current", ""), body.get("new", ""), self.token)
+                except AuthError as e:
+                    return self._json({"error": str(e)}, 400)
+                app.auth.audit(self.user, "changed their password")
+                return self._json({"ok": True})
+
+            # ---- users (admin)
+            if p == "/api/users" or USER_RE.match(p):
+                if not self._need("users"):
+                    return
+                m = USER_RE.match(p)
+                try:
+                    u = app.auth.save_user(body, int(m.group(1)) if m else None, self.user)
+                except AuthError as e:
+                    return self._json({"error": str(e)}, 400)
+                what = [k for k in ("role", "units", "enabled", "display_name", "username") if k in body]
+                if body.get("password"):
+                    what.append("password")
+                app.auth.audit(self.user, (f"updated user {u['username']} ({', '.join(what)})" if m
+                                           else f"created user {u['username']} ({u['role']})"))
+                return self._json(app.auth.public(u))
+
+            # ---- alerts
+            m = ACK_RE.match(p)
+            if m or p == "/api/alerts/ack-all":
+                if not self._need("ack"):
+                    return
+                visible = [a["id"] for a in app.store.alerts(True, 5000) if self._sees(a["unit_id"])]
+                ids = [i for i in ([int(m.group(1))] if m else visible) if i in visible]
+                return self._ack(ids, body.get("note", ""))
+            if p == "/api/alerts/test":
+                if not self._need("settings"):
+                    return
+                app.auth.audit(self.user, "raised a test emergency")
+                return self._json(app.alerts.raise_alert("test", f"TEST: emergency alarm test by {self._who()}"))
+
+            # ---- zones
+            if p == "/api/geofences" or FENCE_RE.match(p):
+                if not self._need("zones"):
+                    return
+                m = FENCE_RE.match(p)
+                return self._save_fence(body, int(m.group(1)) if m else None)
+
+            # ---- units
+            m = UNIT_RE.match(p)
+            if m:
+                if not self._need("units"):
+                    return
+                if not self._sees(m.group(1)):
+                    return self._json({"error": "You don't have access to that unit"}, 403)
+                u = app.store.set_unit(m.group(1), body.get("alias"), body.get("colour"), body.get("notes"))
+                app.auth.audit(self.user, f"updated unit {m.group(1)} (name '{u['alias']}')")
+                app.broker.publish("unit", u)
+                return self._json(u)
+
+            # ---- system settings (admin)
+            if not self._need("settings"):
+                return
             if p == "/api/settings":
                 try:
                     new, notes = app.update_settings(body)
                 except config_mod.Invalid as e:
                     return self._json({"error": str(e)}, 400)
+                app.auth.audit(self.user, "changed settings: " + ", ".join(sorted(body.keys())))
                 return self._json({"ok": True, "notes": notes, "settings": config_mod.public(new)})
             if p == "/api/check-port":
                 host = str(body.get("host", app.cfg["web"]["host"]))
                 port = int(body.get("port", 0) or 0)
                 mine = port == app.cfg["web"]["port"]
                 return self._json({"port": port, "free": mine or port_free(host, port), "mine": mine})
-            if p == "/api/geofences":
-                return self._save_fence(body, None)
-            m = FENCE_RE.match(p)
-            if m:
-                return self._save_fence(body, int(m.group(1)))
-            m = ACK_RE.match(p)
-            if m:
-                return self._ack([int(m.group(1))], body.get("note", ""))
-            if p == "/api/alerts/ack-all":
-                return self._ack(None, body.get("note", ""))
-            if p == "/api/alerts/test":
-                a = app.alerts.raise_alert("test", "TEST: emergency alarm test from the settings page")
-                return self._json(a)
             if p == "/api/tiles/clear":
                 app.tiles.clear()
+                app.auth.audit(self.user, "cleared the map tile cache")
                 return self._json({"ok": True})
             if p == "/api/restart":
+                app.auth.audit(self.user, "restarted the service")
                 self._json({"ok": True})
                 app.restart_requested = True
                 threading.Timer(0.5, app.stop.set).start()
                 return
-            m = UNIT_RE.match(p)
-            if m:
-                u = app.store.set_unit(m.group(1), body.get("alias"), body.get("colour"),
-                                       body.get("notes"))
-                app.broker.publish("unit", u)
-                return self._json(u)
             self._send(404, "Not found", "text/plain")
 
         def do_DELETE(self):
-            if not self._authorised():
+            p = urlparse(self.path).path
+            if not self._same_origin():
+                return self._json({"error": "Cross-site request refused"}, 403)
+            if not self._gate(p):
                 return
-            fm = FENCE_RE.match(urlparse(self.path).path)
-            if fm:
-                app.store.delete_geofence(int(fm.group(1)))
+            m = FENCE_RE.match(p)
+            if m:
+                if not self._need("zones"):
+                    return
+                f = next((z for z in app.store.geofences() if z["id"] == int(m.group(1))), None)
+                app.store.delete_geofence(int(m.group(1)))
                 app.alerts.reload_fences()
+                app.auth.audit(self.user, f"deleted zone {f['name'] if f else m.group(1)}")
                 app.broker.publish("geofences", app.store.geofences())
                 return self._json({"ok": True})
-            m = UNIT_RE.match(urlparse(self.path).path)
-            if not m:
-                return self._send(404, "Not found", "text/plain")
-            app.store.delete_unit(m.group(1))
-            app.store.add_event("settings", f"Unit {m.group(1)} and its history deleted")
-            app.broker.publish("unit_removed", {"id": m.group(1)})
-            self._json({"ok": True})
+            m = USER_RE.match(p)
+            if m:
+                if not self._need("users"):
+                    return
+                try:
+                    u = app.auth.delete_user(int(m.group(1)), self.user)
+                except AuthError as e:
+                    return self._json({"error": str(e)}, 400)
+                app.auth.audit(self.user, f"deleted user {u['username']}")
+                return self._json({"ok": True})
+            m = UNIT_RE.match(p)
+            if m:
+                if not self._need("settings"):
+                    return
+                app.store.delete_unit(m.group(1))
+                app.auth.audit(self.user, f"deleted unit {m.group(1)} and its history")
+                app.broker.publish("unit_removed", {"id": m.group(1)})
+                return self._json({"ok": True})
+            self._send(404, "Not found", "text/plain")
 
         # ---- pieces ---------------------------------------------------
         def _system(self):
@@ -443,18 +683,21 @@ def make_handler(app):
             if not saved:
                 return self._json({"error": "No such zone"}, 404)
             app.alerts.reload_fences()
+            app.auth.audit(self.user, f"{'updated' if fid else 'created'} zone {saved['name']}")
             app.broker.publish("geofences", app.store.geofences())
             self._json(saved)
 
         def _ack(self, ids, note):
-            done = app.store.ack_alerts(ids, str(note)[:200], t=app.now())
+            note = (str(note)[:150] or "Acknowledged") + f" by {self._who()}"
+            done = app.store.ack_alerts(ids, note, t=app.now()) if ids else []
             if done:
+                app.auth.audit(self.user, f"acknowledged {len(done)} alert{'s' if len(done) > 1 else ''}")
                 app.broker.publish("alert_ack", {"ids": done, "note": note})
             self._json({"ok": True, "ids": done})
 
         def _report_csv(self, qs):
             t0, t1 = self._range(qs)
-            rep = reports.fleet_report(app.store, t0, t1, app.cfg)
+            rep = reports.fleet_report(app.store, t0, t1, app.cfg, None, self._allowed_units())
             out = io.StringIO()
             w = csv.writer(out)
             loc = lambda t: time.strftime("%Y-%m-%d %H:%M", time.localtime(t)) if t else ""
@@ -494,8 +737,10 @@ def make_handler(app):
 
         def _export(self, qs):
             unit = qs.get("unit", [""])[0] or None
+            if unit and not self._sees(unit):
+                return self._json({"error": "You don't have access to that unit"}, 403)
             t0, t1 = self._range(qs)
-            rows = app.store.positions_for_export(unit, t0, t1)
+            rows = [r for r in app.store.positions_for_export(unit, t0, t1) if self._sees(r["unit_id"])]
             out = io.StringIO()
             w = csv.writer(out)
             w.writerow(["unit", "received_utc", "gps_time_utc", "lat", "lon",
@@ -529,13 +774,18 @@ def make_handler(app):
             self.send_header("Connection", "keep-alive")
             self.end_headers()
             self.close_connection = True
-            q = app.broker.subscribe()
+            q = app.broker.subscribe(_visible(self.user))
             try:
                 while not app.stop.is_set():
                     try:
                         ev, data = q.get(timeout=15)
                         self.wfile.write(f"event: {ev}\ndata: {data}\n\n".encode())
                     except queue.Empty:
+                        # signed out, disabled or session expired: end the stream
+                        if self.token and not app.auth.session_user(self.token):
+                            self.wfile.write(b"event: signed_out\ndata: {}\n\n")
+                            self.wfile.flush()
+                            break
                         self.wfile.write(b": ping\n\n")
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError, OSError):
@@ -549,6 +799,12 @@ def make_handler(app):
 class _Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+
+    def handle_error(self, request, client_address):
+        import sys
+        if isinstance(sys.exc_info()[1], (ConnectionError, TimeoutError)):
+            return                      # browser went away mid-response: not worth logging
+        super().handle_error(request, client_address)
 
     def __init__(self, addr, handler):
         if ":" in addr[0]:

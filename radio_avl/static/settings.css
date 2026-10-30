@@ -47,3 +47,17 @@ table.units .empty { color: var(--muted); text-align: center; padding: 14px; }
   .two, .status-grid { grid-template-columns: 1fr; }
   table.units th:nth-child(4), table.units td:nth-child(4) { display: none; }
 }
+.top .me-link { margin-left: auto; color: var(--muted); text-decoration: none; font-size: 13px; }
+.top .me-link:hover { color: var(--accent); }
+.top h1 { margin-right: auto; }
+.sub-form { border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin: 12px 0 4px; background: var(--bg); }
+.sub-form h3 { margin-top: 0; }
+.unit-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 2px 12px;
+              padding: 8px 10px; margin: 0 0 10px 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.unit-picks label.check { margin: 0; }
+table.users .uname { font-weight: 550; }
+table.users .usub { font-size: 12px; color: var(--muted); }
+table.users tr.off td { opacity: .55; }
+ul.audit { list-style: none; margin: 0; padding: 0; font-size: 12.5px; max-height: 340px; overflow-y: auto; }
+ul.audit li { display: flex; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+ul.audit time { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }

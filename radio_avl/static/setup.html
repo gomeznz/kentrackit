@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>First-time setup</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/auth.css">
+</head>
+<body class="auth">
+<main class="auth-card">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/></svg>
+    <h1>Welcome to KenTrackIt</h1>
+  </div>
+  <p class="small">Create the administrator account. You can add dispatchers and viewers afterwards
+    under Settings → Users.</p>
+  <form id="f">
+    <label>Your name <input id="n" autocomplete="name" placeholder="e.g. Alex Gordon"></label>
+    <label>Username <input id="u" autocomplete="username" required pattern="[A-Za-z0-9._\-]{2,32}"></label>
+    <label>Password <input id="p" type="password" autocomplete="new-password" minlength="8" required></label>
+    <label>Password again <input id="p2" type="password" autocomplete="new-password" minlength="8" required></label>
+    <div id="err" class="err" role="alert" hidden></div>
+    <button type="submit" class="primary">Create account</button>
+  </form>
+</main>
+<script>
+"use strict";
+(() => {
+  const $ = (id) => document.getElementById(id);
+  $("f").onsubmit = async (ev) => {
+    ev.preventDefault(); $("err").hidden = true;
+    const fail = (m) => { $("err").textContent = m; $("err").hidden = false; };
+    if ($("p").value !== $("p2").value) return fail("The passwords don't match");
+    const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || "Failed"); return j; });
+    try {
+      await post("/api/setup", { username: $("u").value, display_name: $("n").value, password: $("p").value });
+      await post("/api/login", { username: $("u").value, password: $("p").value });
+      location.href = "/settings";
+    } catch (e) { fail(e.message); }
+  };
+})();
+</script>
+</body>
+</html>

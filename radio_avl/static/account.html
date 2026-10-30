@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My account</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/settings.css">
+</head>
+<body class="settings">
+<div class="page">
+  <header class="top">
+    <a href="/" class="back">← Map</a>
+    <h1>My account</h1>
+  </header>
+  <div id="toast" class="toast" hidden></div>
+
+  <section class="card">
+    <h2 id="me-name"></h2>
+    <div class="status-grid">
+      <div><span class="k">Username</span><span id="me-user"></span></div>
+      <div><span class="k">Role</span><span id="me-role"></span></div>
+      <div><span class="k">Units</span><span id="me-units"></span></div>
+      <div><span class="k">Last sign-in</span><span id="me-last"></span></div>
+    </div>
+    <p class="help" id="me-can"></p>
+    <div class="actions">
+      <a href="/settings" class="btn" id="to-settings" hidden>Settings</a>
+      <button id="signout" class="danger">Sign out</button>
+    </div>
+  </section>
+
+  <form class="card" id="pw">
+    <h2>Change password</h2>
+    <label>Current password <input type="password" id="pw-cur" autocomplete="current-password" required></label>
+    <div class="two">
+      <label>New password <input type="password" id="pw-new" autocomplete="new-password" minlength="8" required></label>
+      <label>New password again <input type="password" id="pw-new2" autocomplete="new-password" minlength="8" required></label>
+    </div>
+    <p class="help">At least 8 characters. Changing it signs you out everywhere else.</p>
+    <div class="actions"><button type="submit">Change password</button></div>
+  </form>
+</div>
+<script src="/static/common.js"></script>
+<script>
+"use strict";
+(async () => {
+  const $ = (id) => document.getElementById(id);
+  const toast = (m, err) => { const t = $("toast"); t.textContent = m; t.className = "toast" + (err ? " err" : ""); t.hidden = false; setTimeout(() => (t.hidden = true), 4000); };
+  const me = await (await fetch("/api/me")).json();
+  const CAN = { view: "see the live map", reports: "run trip reports", export: "export data", ack: "acknowledge alerts",
+                zones: "edit zones", units: "name units", settings: "change settings", users: "manage users", backup: "download backups" };
+  $("me-name").textContent = me.display_name || me.username;
+  $("me-user").textContent = me.username;
+  $("me-role").textContent = me.role_label;
+  $("me-units").textContent = me.units ? me.units.join(", ") || "none" : "All units";
+  $("me-last").textContent = me.last_login ? new Date(me.last_login * 1000).toLocaleString([], { hour12: false }) : "–";
+  $("me-can").textContent = "You can " + me.perms.map((p) => CAN[p]).filter(Boolean).join(", ") + ".";
+  $("to-settings").hidden = !me.perms.includes("settings");
+  $("signout").onclick = async () => { await fetch("/api/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); location.href = "/login"; };
+  $("pw").onsubmit = async (ev) => {
+    ev.preventDefault();
+    if ($("pw-new").value !== $("pw-new2").value) return toast("The new passwords don't match", true);
+    const r = await fetch("/api/me/password", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current: $("pw-cur").value, new: $("pw-new").value }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return toast(j.error || "Couldn't change password", true);
+    $("pw").reset(); toast("Password changed");
+  };
+})();
+</script>
+</body>
+</html>

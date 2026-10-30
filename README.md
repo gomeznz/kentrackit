@@ -25,6 +25,8 @@ added once the poll command has been captured (see *Roadmap*).
   map, numbered stops (named by zone) and trips with distance and top speed. Print or CSV
 - **Dispatch screen:** trails (last N minutes), follow a unit, and a full-screen wall display
   (`/?wall=1` opens straight into it, handy for a kiosk screen)
+- **Users and access control:** sign-in page, Administrator / Dispatcher / Viewer roles, optional
+  per-user unit restrictions, audit log (see *Users* below)
 - Settings page for every option (`/settings`, or the ⚙ on the map)
 - Plays nicely with other services on the same Pi: checks a web port is free before using it,
   lists the ports already taken, and picks the radio's serial adapter by its stable name
@@ -54,6 +56,28 @@ Logs: `journalctl -u radio-avl -f`
 
 To upgrade, run `git pull` then `sudo ./install.sh` again. Your config and
 history are kept.
+
+## Users
+
+| Role | Can do |
+|---|---|
+| Administrator | Everything: settings, users, backups, plus all of the below |
+| Dispatcher | Live map, acknowledge alerts, draw/edit zones, name units, reports, CSV exports |
+| Viewer | Live map and reports, read-only. Can silence an alarm on their own screen but not acknowledge it |
+
+Any user can be limited to certain units. They then only see those units on the map, in
+history, alerts, reports and exports (alerts not tied to a unit are shown to everyone).
+
+- Manage users under **Settings → Users**; everyone can change their own password at `/account`.
+- A fresh install opens a setup page to create the first administrator. Upgrading from v0.2/0.3
+  turns the old single login into the first administrator account (same username and password).
+- Sessions last 12 hours of inactivity, or 30 days with "keep me signed in" (use that for wall
+  displays: create a Viewer account for the screen).
+- 5 wrong passwords for a username locks it for 5 minutes (20 per address).
+- Disabling a user, deleting them or changing their password signs them out immediately.
+- **Settings → Audit log** lists sign-ins, failed sign-ins, settings and user changes, and who
+  acknowledged alerts.
+- Scripts can use HTTP Basic auth with any account, e.g. `curl -u alex:… http://pi:8090/api/units`.
 
 ## Files
 

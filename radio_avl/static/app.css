@@ -207,3 +207,6 @@ body.wall .leaflet-top { top: 50px; }
 .basemap-switch button + button { border-left: 1px solid #ccc; }
 .basemap-switch button.on { background: #1d2330; color: #fff; }
 .on-sat .zone-label { color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 2px #000; }
+.tool.me { margin-left: auto; }
+.tool.me span { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#emergency #em-silence { background: rgba(255,255,255,.2); color: #fff; }

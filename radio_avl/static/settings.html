@@ -13,6 +13,7 @@
   <header class="top">
     <a href="/" class="back">← Map</a>
     <h1><span id="s-title">KenTrackIt</span> settings</h1>
+    <a href="/account" class="me-link" id="me-link"></a>
   </header>
 
   <div id="warn" class="banner" hidden></div>
@@ -58,15 +59,7 @@
       </label>
     </div>
     <p class="help">Ports already in use on this Pi: <span id="ports-used">–</span></p>
-    <div class="two">
-      <label>Username <input id="web-user" maxlength="32" required autocomplete="username"></label>
-      <label>New password
-        <input id="web-pass" type="password" minlength="6" autocomplete="new-password"
-               placeholder="leave blank to keep">
-      </label>
-    </div>
-    <label class="check" id="clear-pass-wrap" hidden><input type="checkbox" id="web-clear-pass">
-      Remove the password (anyone on the network can view and change settings)</label>
+    <p class="help">Sign-in accounts are managed under <a href="#users-card">Users</a>.</p>
     <div class="actions"><button type="submit">Save</button></div>
   </form>
 
@@ -147,6 +140,50 @@
     </div>
     <div class="actions"><button type="submit">Save</button></div>
   </form>
+
+  <!-- Users -->
+  <section class="card" id="users-card">
+    <h2>Users</h2>
+    <p class="help"><b>Administrator</b>: everything. <b>Dispatcher</b>: map, acknowledge alerts, edit
+      zones, name units, reports and exports. <b>Viewer</b>: map and reports only (good for a wall display).
+      Any user can be limited to certain units; they then only see those units everywhere.</p>
+    <table class="units users">
+      <thead><tr><th>Name</th><th>Role</th><th>Units</th><th>Last sign-in</th><th></th></tr></thead>
+      <tbody id="user-rows"></tbody>
+    </table>
+    <form id="u-form" class="sub-form" hidden>
+      <h3 id="u-form-title">New user</h3>
+      <div class="two">
+        <label>Name <input id="uf-name" maxlength="60" placeholder="e.g. Dispatch desk"></label>
+        <label>Username <input id="uf-user" required pattern="[A-Za-z0-9._\-]{2,32}" autocomplete="off"></label>
+      </div>
+      <div class="two">
+        <label>Role
+          <select id="uf-role"><option value="viewer">Viewer</option><option value="dispatcher">Dispatcher</option>
+            <option value="admin">Administrator</option></select>
+        </label>
+        <label>Password <input id="uf-pass" type="password" minlength="8" autocomplete="new-password"></label>
+      </div>
+      <label class="check"><input type="radio" name="uf-scope" id="uf-all" checked> All units, including new ones</label>
+      <label class="check"><input type="radio" name="uf-scope" id="uf-some"> Only these units:</label>
+      <div id="uf-units" class="unit-picks" hidden></div>
+      <label class="check"><input type="checkbox" id="uf-enabled" checked> Account enabled</label>
+      <div class="actions">
+        <button type="button" id="uf-delete" class="danger" hidden>Delete user</button>
+        <button type="button" id="uf-cancel">Cancel</button>
+        <button type="submit">Save user</button>
+      </div>
+    </form>
+    <div class="actions" id="u-add-row"><button type="button" id="u-add">Add user</button></div>
+  </section>
+
+  <!-- Audit -->
+  <section class="card">
+    <h2>Audit log</h2>
+    <p class="help">Sign-ins, failed sign-ins, settings changes, user changes and who acknowledged alerts.</p>
+    <ul id="audit" class="audit"></ul>
+    <div class="actions"><button type="button" id="audit-more">Show more</button></div>
+  </section>
 
   <!-- Alerts -->
   <form class="card" data-section="alerts">
@@ -234,6 +271,7 @@
     <div class="actions"><button type="button" id="restart" class="danger">Restart service</button></div>
   </section>
 </div>
+<script src="/static/common.js"></script>
 <script src="/static/vendor/leaflet.js"></script>
 <script src="/static/basemap.js"></script>
 <script src="/static/settings.js"></script>

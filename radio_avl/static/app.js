@@ -13,6 +13,16 @@
   const skew = cfg.now * 1000 - Date.now();          // server clock minus browser clock
   const now = () => (Date.now() + skew) / 1000;
   document.title = cfg.title; $("title").textContent = cfg.title; $("w-title").textContent = cfg.title;
+  const me = cfg.user, can = (p) => me.perms.includes(p);
+  $("me-name").textContent = me.display_name || me.username;
+  $("t-settings").hidden = !can("settings");
+  $("t-reports").hidden = !can("reports");
+  $("d-edit").hidden = !can("units");
+  $("p-csv").hidden = !can("export");
+  $("p-report").hidden = !can("reports");
+  $("a-ack-all").hidden = !can("ack");
+  $("z-add-circle").hidden = $("z-add-poly").hidden = !can("zones");
+  $("em-ack").hidden = !can("ack"); $("em-silence").hidden = can("ack");
 
   // ---- map -----------------------------------------------------------
   const map = L.map("map", { zoomControl: true }).setView(cfg.map.center, cfg.map.zoom);
@@ -301,7 +311,8 @@
       const body = el("div", "a-body", a.detail);
       const act = el("div", "a-act");
       if (a.lat != null) { const b = el("button", null, "Show"); b.onclick = () => { map.setView([a.lat, a.lon], Math.max(map.getZoom(), 16)); if (a.unit_id && units.has(a.unit_id)) select(a.unit_id); }; act.appendChild(b); }
-      if (!a.ack_time) { const b = el("button", null, "Acknowledge"); b.onclick = () => post(`/api/alerts/${a.id}/ack`, {}); act.appendChild(b); }
+      if (!a.ack_time && can("ack")) { const b = el("button", null, "Acknowledge"); b.onclick = () => post(`/api/alerts/${a.id}/ack`, {}); act.appendChild(b); }
+      else if (!a.ack_time) act.appendChild(el("span", "muted", "Waiting for a dispatcher"));
       else act.appendChild(el("span", "muted", "✓ " + (a.ack_note || "acknowledged") + " " + clock(a.ack_time)));
       li.append(head, body, act);
       ul.appendChild(li);
@@ -322,12 +333,14 @@
       $("em-time").textContent = stamp(a.t);
       $("em-show").hidden = a.lat == null;
       if (!KTSound.unlocked()) $("sound-hint").hidden = false;
-      KTSound.alarmStart();         // emergencies sound even when chimes are muted
+      if (!crit.every((x) => silenced.has(x.id))) KTSound.alarmStart();   // sounds even when chimes are muted
     } else {
       KTSound.alarmStop();
     }
     refreshIcons();
   }
+  const silenced = new Set();
+  $("em-silence").onclick = () => { for (const a of openAlerts()) silenced.add(a.id); KTSound.alarmStop(); };
   $("em-ack").onclick = () => {
     for (const a of openAlerts().filter((x) => x.severity === "critical")) post(`/api/alerts/${a.id}/ack`, { note: "Emergency acknowledged" });
   };
@@ -344,7 +357,7 @@
       const layer = z.shape === "circle" ? L.circle(z.geometry.center, { radius: z.geometry.radius, ...style })
         : L.polygon(z.geometry.points, style);
       layer.bindTooltip(z.name, { permanent: true, direction: "center", className: "zone-label" });
-      layer.on("click", () => { if (tab === "zones" && !drawing) editZone(z); });
+      layer.on("click", () => { if (tab === "zones" && !drawing && can("zones")) editZone(z); });
       zoneLayer.addLayer(layer);
     }
     $("zone-count").textContent = zones.length || "";
@@ -359,7 +372,7 @@
       mid.append(el("div", "name", z.name), el("div", "sub", flags.join(" · ")));
       const inside = [...units.values()].filter((e) => e.zones.includes(z.id)).length;
       li.append(sw, mid, el("div", "age", inside ? `${inside} in` : ""));
-      li.onclick = () => editZone(z, true);
+      li.onclick = () => { if (can("zones")) editZone(z, true); else if (z.shape === "circle") map.setView(z.geometry.center, 16); else map.fitBounds(z.geometry.points); };
       ul.appendChild(li);
     }
   }
@@ -560,6 +573,7 @@
       const d = JSON.parse(m.data);
       $("display").textContent = d.fields.filter(Boolean).join("  ·  ") || "—";
     });
+    es.addEventListener("signed_out", () => { location.href = "/login"; });
     es.addEventListener("event", (m) => { const d = JSON.parse(m.data); logLine(d.t, d.kind + ": " + d.detail); });
     es.onopen = async () => {          // after a reconnect, catch up on anything missed
       const [a, z] = await Promise.all([fetch("/api/alerts?limit=200").then((r) => r.json()), fetch("/api/geofences").then((r) => r.json())]);

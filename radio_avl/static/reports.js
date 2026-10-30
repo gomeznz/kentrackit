@@ -6,10 +6,11 @@
                    "#c026d3", "#65a30d", "#b45309", "#4f46e5", "#0d9488", "#e11d48"];
   const colourOf = (id, c) => { if (c) return c; let h = 0; for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
 
-  const [cfg, settings, units] = await Promise.all(["/api/config", "/api/settings", "/api/units"].map((u) => fetch(u).then((r) => r.json())));
+  const [cfg, units] = await Promise.all(["/api/config", "/api/units"].map((u) => fetch(u).then((r) => r.json())));
   $("r-title").textContent = cfg.title; document.title = cfg.title + " report";
-  $("r-stopmin").textContent = settings.reports.stop_min; $("r-stoprad").textContent = settings.reports.stop_radius_m;
-  const kmh = settings.display.speed_units !== "knots";
+  $("r-csv").hidden = !cfg.user.perms.includes("export");
+  $("r-stopmin").textContent = cfg.reports.stop_min; $("r-stoprad").textContent = cfg.reports.stop_radius_m;
+  const kmh = cfg.speed_units !== "knots";
   const spd = (k) => kmh ? `${k} km/h` : `${(k / 1.852).toFixed(0)} kn`;
   const hm = (s) => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h} h ${String(m).padStart(2, "0")} min` : `${m} min`; };
   const tm = (t) => new Date(t * 1000).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit" });

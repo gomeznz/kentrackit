@@ -17,13 +17,14 @@ import time
 from . import config as config_mod
 from . import kenwood
 from .alerts import AlertEngine
+from .auth import Auth
 from .store import Store
 from .web import Broker, TileCache, serve, rebind
 
 log = logging.getLogger("radio-avl")
 
 class App:
-    VERSION = "0.3.1"
+    VERSION = "0.4"
 
     def __init__(self, cfg, config_path=None, mode="serial"):
         self.cfg = cfg
@@ -33,6 +34,7 @@ class App:
         self.store = Store(os.path.join(cfg["data_dir"], "avl.db"))
         self.broker = Broker()
         self.alerts = AlertEngine(self)
+        self.auth = Auth(self)
         self.tiles = TileCache(cfg, cfg["data_dir"])
         self.sat_tiles = TileCache(cfg, cfg["data_dir"], "sat")
         self.servers = []
