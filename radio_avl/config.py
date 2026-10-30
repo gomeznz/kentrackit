@@ -40,6 +40,8 @@ DEFAULTS = {
     "alerts": {"overdue_min": 10, "speed_limit_kmh": 0, "status_watch": True,
                "emergency_keywords": "emergency, emerg, man down"},
     "reports": {"stop_min": 5, "stop_radius_m": 60},
+    "recording": {"enabled": False, "device": "", "rate": 16000, "format": "opus", "bitrate_kbps": 16,
+                  "keep_days": 90, "preroll_ms": 300, "hang_ms": 400, "voice_only": True, "min_free_mb": 1000},
     "polling": {"mode": "off", "command": "", "format": "ascii", "units": "",
                 "moving_s": 20, "parked_s": 120, "emergency_s": 10,
                 "timeout_s": 8, "guard_s": 1.0, "max_per_min": 20},
@@ -311,6 +313,35 @@ def apply_patch(cfg, patch):
             new["reports"]["stop_min"] = _num(r["stop_min"], 1, 240, "Stop length", True)
         if "stop_radius_m" in r:
             new["reports"]["stop_radius_m"] = _num(r["stop_radius_m"], 15, 1000, "Stop radius", True)
+
+    rc = patch.get("recording")
+    if rc is not None:
+        R = new["recording"]
+        if "enabled" in rc:
+            R["enabled"] = bool(rc["enabled"])
+        if "device" in rc:
+            d = str(rc["device"]).strip()
+            if d and not (d == "test" or re.fullmatch(r"[A-Za-z0-9_:=,.\-]{1,80}", d)):
+                raise Invalid("Sound card should look like plughw:CARD=Device,DEV=0")
+            R["device"] = d
+        if "rate" in rc:
+            r = _num(rc["rate"], 8000, 48000, "Sample rate", True)
+            if r not in (8000, 16000, 24000, 48000):
+                raise Invalid("Sample rate must be 8000, 16000, 24000 or 48000")
+            R["rate"] = r
+        if "format" in rc:
+            if rc["format"] not in ("opus", "wav"):
+                raise Invalid("Format must be opus or wav")
+            R["format"] = rc["format"]
+        for k, lo, hi, name in (("bitrate_kbps", 6, 64, "Bitrate"), ("keep_days", 0, 3650, "Keep recordings"),
+                                ("preroll_ms", 0, 2000, "Pre-roll"), ("hang_ms", 0, 3000, "Hang time"),
+                                ("min_free_mb", 100, 100000, "Minimum free disk")):
+            if k in rc:
+                R[k] = _num(rc[k], lo, hi, name, True)
+        if "voice_only" in rc:
+            R["voice_only"] = bool(rc["voice_only"])
+        if R["enabled"] and not R["device"]:
+            raise Invalid("Pick the sound card the monitor radio's audio is plugged into")
 
     pl = patch.get("polling")
     if pl is not None:

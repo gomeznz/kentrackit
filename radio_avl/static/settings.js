@@ -92,6 +92,45 @@
     $("disp-speed").value = S.display.speed_units;
     $("disp-trail").value = S.display.trail_min;
   }
+  // ---- voice recording ---------------------------------------------------------------
+  let VOICE = null;
+  async function loadVoice() {
+    try { VOICE = await api("/api/voice"); } catch (e) { return; }
+    const v = VOICE.status;
+    const st = { off: "Off", listening: "Listening", error: "Problem: " + v.error }[v.state] || v.state;
+    $("vr-st").textContent = st + (v.paused_for_disk ? " (paused: disk nearly full)" : "") + (v.state === "listening" && S.recording.format === "opus" && !v.encoder ? " · no Opus encoder, saving WAV" : "");
+    $("vr-st").className = v.state === "error" ? "bad-text" : v.state === "listening" ? "ok-text" : "";
+    $("vr-usage").textContent = `${VOICE.usage.files} calls, ${bytes(VOICE.usage.bytes)}`;
+    meter(v.levels);
+  }
+  function fillVoice() {
+    const R = S.recording;
+    $("vr-on").checked = R.enabled; $("vr-fmt").value = R.format; $("vr-keep").value = R.keep_days;
+    $("vr-rate").value = R.rate; $("vr-br").value = R.bitrate_kbps; $("vr-pre").value = R.preroll_ms;
+    $("vr-hang").value = R.hang_ms; $("vr-free").value = R.min_free_mb; $("vr-voiceonly").checked = R.voice_only;
+    const sel = $("vr-dev"); sel.replaceChildren();
+    const opt = (v, t) => { const o = document.createElement("option"); o.value = v; o.textContent = t; sel.appendChild(o); };
+    opt("", "– choose –");
+    for (const d of (VOICE && VOICE.devices) || []) opt(d.device, `${d.name} (${d.device})`);
+    opt("test", "Test signal (no hardware)");
+    opt("__custom", "Other device…");
+    sel.value = [...sel.options].some((o) => o.value === R.device) ? R.device : (R.device ? "__custom" : "");
+    $("vr-dev-custom").value = R.device; $("vr-dev-custom").hidden = sel.value !== "__custom";
+  }
+  $("vr-dev").onchange = () => { $("vr-dev-custom").hidden = $("vr-dev").value !== "__custom"; };
+  function meter(lv) {
+    if (!lv || !lv.fresh) { $("vr-meter").style.width = "0"; $("vr-peak").style.left = "0"; $("vr-level").textContent = "No audio"; return; }
+    const pos = (db) => Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+    $("vr-meter").style.width = pos(lv.rms_db) + "%";
+    $("vr-peak").style.left = pos(lv.peak_db) + "%";
+    $("vr-level").textContent = `peak ${lv.peak_db} dB · average ${lv.rms_db} dB` + (lv.peak_db > -1 ? " (clipping: turn it down)" : lv.peak_db < -40 ? " (very quiet)" : "");
+  }
+  let voiceTimer = null;
+  new IntersectionObserver((es) => {
+    clearInterval(voiceTimer);
+    if (es[0].isIntersecting) voiceTimer = setInterval(loadVoice, 500);
+  }).observe($("voice-card"));
+
   function fillPolling() {
     const P = S.polling;
     $("pl-mode").value = P.mode; $("pl-cmd").value = P.command; $("pl-fmt").value = P.format; $("pl-units").value = P.units;
@@ -247,6 +286,11 @@
     display: () => ({ display: { stale_after_s: +$("disp-stale").value,
       lost_after_s: Math.round(+$("disp-lost").value * 60), speed_units: $("disp-speed").value,
       trail_min: +$("disp-trail").value } }),
+    recording: () => ({ recording: { enabled: $("vr-on").checked,
+      device: $("vr-dev").value === "__custom" ? $("vr-dev-custom").value.trim() : $("vr-dev").value,
+      format: $("vr-fmt").value, keep_days: +$("vr-keep").value, rate: +$("vr-rate").value, bitrate_kbps: +$("vr-br").value,
+      preroll_ms: +$("vr-pre").value, hang_ms: +$("vr-hang").value, min_free_mb: +$("vr-free").value,
+      voice_only: $("vr-voiceonly").checked } }),
     polling: () => ({ polling: { mode: $("pl-mode").value, command: $("pl-cmd").value, format: $("pl-fmt").value,
       units: $("pl-units").value, moving_s: +$("pl-moving").value, parked_s: +$("pl-parked").value,
       emergency_s: +$("pl-emerg").value, timeout_s: +$("pl-timeout").value, guard_s: +$("pl-guard").value,
@@ -399,11 +443,12 @@
   setInterval(() => { if (!$("cap-stop").hidden) loadCaptures(); }, 5000);
 
   // ---- load ----------------------------------------------------------------------
-  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
+  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillVoice(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
   async function refresh() {
     try { SYS = await api("/api/system"); fillStatus(); } catch (e) { /* offline briefly */ }
   }
   [S, SYS] = await Promise.all([api("/api/settings"), api("/api/system")]);
+  try { VOICE = await api("/api/voice"); } catch (e) { /* not an admin */ }
   fillAll();
   fillUnits();
   ME = await api("/api/me");

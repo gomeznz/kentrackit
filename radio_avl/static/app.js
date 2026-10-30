@@ -247,8 +247,30 @@
     $("d-alias").value = e.data.alias || "";
     $("d-colour").value = colour(e.data);
     if (following) setFollow(true);
-    renderDetail(); renderList();
+    renderDetail(); renderList(); loadCalls();
   }
+  // ---- recent calls for the selected unit (voice recordings) --------------------
+  const canListen = can("listen") && cfg.recording;
+  async function loadCalls() {
+    $("d-calls-wrap").hidden = !canListen || !selected;
+    if (!canListen || !selected) return;
+    const id = selected;
+    const rows = await (await fetch(`/api/channel/log?unit=${encodeURIComponent(id)}&kind=voice&audio=1&limit=5&from=${now() - 7 * 86400}&to=${now() + 60}`)).json();
+    if (selected !== id) return;
+    const ul = $("d-calls"); ul.replaceChildren();
+    if (!rows.length) { ul.appendChild(el("li", "empty", "No recorded calls in the last 7 days.")); return; }
+    for (const r of rows) {
+      const li = el("li");
+      const b = el("button", "play-btn" + (KTPlayer.current() === r.id && KTPlayer.playing() ? " on" : ""), "▶");
+      b.dataset.tx = r.id; b.title = "Play this call";
+      b.onclick = () => KTPlayer.play(r.id, `${label(units.get(id).data)} · ${stamp(r.start)}`);
+      li.append(b, el("time", null, stamp(r.start)), el("span", "grow"), el("span", "muted", `${Math.round(r.audio_s || r.duration)} s`));
+      ul.appendChild(li);
+    }
+  }
+  KTPlayer.onChange((id, state) => {
+    for (const b of document.querySelectorAll(".play-btn")) b.classList.toggle("on", +b.dataset.tx === id && state === "playing");
+  });
   function renderDetail() {
     const e = selected && units.get(selected);
     if (!e) return;
@@ -735,6 +757,10 @@
       if (t.kind !== "voice") return;
       const who = t.unit_id && units.has(t.unit_id) ? label(units.get(t.unit_id).data) : "Someone";
       logLine(t.start, `${who} talked for ${t.duration < 10 ? t.duration.toFixed(1) : Math.round(t.duration)} s`);
+    });
+    es.addEventListener("recording", (m) => {
+      const d = JSON.parse(m.data);
+      if (selected && d.unit_id === selected) loadCalls();
     });
     es.addEventListener("poll", (m) => {
       const d = JSON.parse(m.data);

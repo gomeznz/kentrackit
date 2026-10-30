@@ -17,7 +17,7 @@ from http.cookies import SimpleCookie
 from urllib.parse import urlparse, parse_qs, quote
 
 from . import config as config_mod
-from . import geo, reports
+from . import geo, reports, voice as voice_mod
 from .auth import AuthError, ROLES, REMEMBER_S
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -27,6 +27,7 @@ FENCE_RE = re.compile(r"^/api/geofences/(\d{1,9})$")
 ACK_RE = re.compile(r"^/api/alerts/(\d{1,12})/ack$")
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 USER_RE = re.compile(r"^/api/users/(\d{1,9})$")
+REC_RE = re.compile(r"^/api/recordings/(\d{1,12})$")
 POLL_RE = re.compile(r"^/api/units/([A-Za-z0-9_.-]{1,32})/poll$")
 CAPTURE_RE = re.compile(r"^/api/captures/(capture_\d{8}_\d{6}\.log)$")
 COOKIE = "kt_session"
@@ -57,6 +58,8 @@ def _visible(user):
             return data.get("unit_id") is None or data["unit_id"] in allowed
         if event == "poll":
             return data.get("unit") in allowed
+        if event == "recording":
+            return data.get("unit_id") is None or data["unit_id"] in allowed
         return True
     return ok
 
@@ -396,6 +399,7 @@ def make_handler(app):
                     "trail_min": cfg["display"]["trail_min"],
                     "reports": cfg["reports"],
                     "polling_mode": cfg["polling"]["mode"],
+                    "recording": cfg["recording"]["enabled"],
                     "tiles": app.tiles.enabled(),
                     "attribution": app.tiles.attribution,
                     "max_zoom": app.tiles.max_zoom,
@@ -483,7 +487,29 @@ def make_handler(app):
                     return
                 t0, t1 = self._range(qs)
                 return self._json(app.channel.log(t0, t1, qs.get("unit", [""])[0] or None, qs.get("kind", [""])[0] or None,
-                                                  min(int(qs.get("limit", [500])[0]), 5000), self._allowed_units()))
+                                                  min(int(qs.get("limit", [500])[0]), 5000), self._allowed_units(),
+                                                  with_audio=qs.get("audio", ["0"])[0] == "1"))
+            m = REC_RE.match(p)
+            if m:
+                if not self._need("listen"):
+                    return
+                tx = app.channel.get(int(m.group(1)))
+                if not tx or not tx["audio"] or not self._sees(tx["unit_id"]):
+                    return self._json({"error": "No recording"}, 404)
+                path = app.voice.file_for(tx["audio"])
+                if not path:
+                    return self._json({"error": "The recording file is missing"}, 404)
+                if "Range" not in self.headers or self.headers.get("Range", "").startswith("bytes=0-"):
+                    app.auth.audit(self.user, f"played the recording of {tx['unit_id'] or 'unknown unit'} at "
+                                              f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(tx['start']))}")
+                name = f"{tx['unit_id'] or 'call'}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(tx['start']))}{os.path.splitext(path)[1]}"
+                return self._file(path, "audio/ogg" if path.endswith(".opus") else "audio/wav",
+                                  qs.get("download", ["0"])[0] == "1" and name)
+            if p == "/api/voice":
+                if not self._need("settings"):
+                    return
+                return self._json({"status": app.voice.info(), "devices": voice_mod.list_devices(),
+                                   "usage": app.voice.usage()})
             if p == "/api/channel/log.csv":
                 if not self._need("export"):
                     return
@@ -755,6 +781,7 @@ def make_handler(app):
                 "serial_ports": serial_ports(cfg["serial"]["port"]),
                 "bauds": config_mod.BAUDS,
                 "poller": app.poller.status(),
+                "voice": app.voice.info(),
             })
             try:
                 du = shutil.disk_usage(cfg["data_dir"])
@@ -824,6 +851,30 @@ def make_handler(app):
             name = f"kentrackit_report_{time.strftime('%Y%m%d', time.localtime(t0))}.csv"
             self._send(200, out.getvalue(), "text/csv",
                        {"Content-Disposition": f'attachment; filename="{name}"'})
+
+        def _file(self, path, ctype, download_name=None):
+            size = os.path.getsize(path)
+            start, end = 0, size - 1
+            rng = self.headers.get("Range", "")
+            mr = re.match(r"bytes=(\d*)-(\d*)$", rng)
+            partial = bool(mr) and (mr.group(1) or mr.group(2))
+            if partial:
+                if mr.group(1):
+                    start = int(mr.group(1)); end = int(mr.group(2)) if mr.group(2) else size - 1
+                else:
+                    start = max(0, size - int(mr.group(2)))
+                end = min(end, size - 1)
+                if start > end:
+                    return self._send(416, b"", "text/plain", {"Content-Range": f"bytes */{size}"})
+            with open(path, "rb") as f:
+                f.seek(start)
+                data = f.read(end - start + 1)
+            h = {"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"}
+            if partial:
+                h["Content-Range"] = f"bytes {start}-{end}/{size}"
+            if download_name:
+                h["Content-Disposition"] = f'attachment; filename="{download_name}"'
+            self._send(206 if partial else 200, data, ctype, h)
 
         def _static(self, rel):
             path = os.path.normpath(os.path.join(STATIC, rel))

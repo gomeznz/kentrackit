@@ -5,7 +5,7 @@ After=network.target
 [Service]
 User=radio-avl
 Group=radio-avl
-SupplementaryGroups=dialout
+SupplementaryGroups=dialout audio
 WorkingDirectory=/opt/radio-avl
 ExecStart=/usr/bin/python3 -m radio_avl --config /etc/radio-avl/config.json
 Restart=always

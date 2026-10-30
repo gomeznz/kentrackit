@@ -158,8 +158,18 @@
   }
 
   // ---- log --------------------------------------------------------------------------------
+  const canListen = cfg.user.perms.includes("listen");
   function logRow(r, fresh) {
     const tr = el("tr", fresh ? "new" : "");
+    tr.dataset.tx = r.id;
+    const pc = el("td", "pcol");
+    if (r.has_audio && canListen) {
+      const b = el("button", "play-btn" + (KTPlayer.current() === r.id && KTPlayer.playing() ? " on" : ""), "▶");
+      b.dataset.tx = r.id; b.title = "Play this call";
+      b.onclick = () => KTPlayer.play(r.id, `${nameOf(r.unit_id)} · ${tm(r.start, true)}`);
+      pc.appendChild(b);
+    }
+    tr.appendChild(pc);
     const k = el("span", "kind"); const i = el("i"); i.style.background = `var(${(KINDS.find((x) => x[0] === r.kind) || KINDS[0])[2]})`;
     k.append(i, (KINDS.find((x) => x[0] === r.kind) || [0, r.kind])[1]);
     const kt = el("td"); kt.appendChild(k);
@@ -168,10 +178,10 @@
     return tr;
   }
   async function loadLog() {
-    const kind = $("log-kind").value;
-    const rows = await (await fetch(`/api/channel/log?from=${t0}&to=${t1 + 3600}&limit=500${kind ? "&kind=" + kind : ""}`)).json();
+    const sel = $("log-kind").value, kind = sel === "rec" ? "voice" : sel;
+    const rows = await (await fetch(`/api/channel/log?from=${t0}&to=${t1 + 3600}&limit=500${kind ? "&kind=" + kind : ""}${sel === "rec" ? "&audio=1" : ""}`)).json();
     const tb = $("log-rows"); tb.replaceChildren();
-    if (!rows.length) { const tr = el("tr"); const td = el("td", "empty", "Nothing heard in this period."); td.colSpan = 5; tr.appendChild(td); tb.appendChild(tr); }
+    if (!rows.length) { const tr = el("tr"); const td = el("td", "empty", "Nothing heard in this period."); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); }
     for (const r of rows) tb.appendChild(logRow(r));
   }
   $("log-kind").onchange = loadLog;
@@ -187,8 +197,20 @@
   }
   const es = new EventSource("/api/stream");
   es.addEventListener("onair", (m) => setOnAir(JSON.parse(m.data)));
+  KTPlayer.onChange((id, state) => {
+    for (const b of document.querySelectorAll(".play-btn")) b.classList.toggle("on", +b.dataset.tx === id && state === "playing");
+  });
+  es.addEventListener("recording", (m) => {          // a call's recording is ready: give its row a play button
+    const d = JSON.parse(m.data);
+    const row = [...$("log-rows").children].find((tr) => tr.dataset.tx === String(d.tx_id));
+    if (row && canListen && !row.querySelector(".play-btn")) {
+      const b = el("button", "play-btn", "▶"); b.dataset.tx = d.tx_id; b.title = "Play this call";
+      b.onclick = () => KTPlayer.play(d.tx_id, `${nameOf(d.unit_id)} · ${row.children[1].textContent}`);
+      row.firstChild.appendChild(b);
+    }
+  });
   es.addEventListener("tx", (m) => {
-    const r = JSON.parse(m.data), kind = $("log-kind").value;
+    const r = JSON.parse(m.data), sel = $("log-kind").value, kind = sel === "rec" ? "voice" : sel;
     if (Date.now() / 1000 - t1 > 120 && span > 0) return;          // looking at the past: leave the log alone
     if (kind && r.kind !== kind) return;
     const tb = $("log-rows"); if (tb.querySelector(".empty")) tb.replaceChildren();

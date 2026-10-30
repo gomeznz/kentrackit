@@ -22,13 +22,14 @@ from .channel import Channel
 from .coverage import Coverage
 from .poller import Poller
 from .recorder import Recorder
+from .voice import VoiceRecorder
 from .store import Store
 from .web import Broker, TileCache, serve, rebind
 
 log = logging.getLogger("radio-avl")
 
 class App:
-    VERSION = "0.5"
+    VERSION = "0.6"
 
     def __init__(self, cfg, config_path=None, mode="serial"):
         self.cfg = cfg
@@ -39,6 +40,7 @@ class App:
         self.broker = Broker()
         self.alerts = AlertEngine(self)
         self.auth = Auth(self)
+        self.voice = VoiceRecorder(self)
         self.channel = Channel(self)
         self.coverage = Coverage(self)
         self.poller = Poller(self)
@@ -82,6 +84,8 @@ class App:
             if new["serial"] != old["serial"]:
                 self.reconnect.set()
                 notes.append("Reconnecting to the radio with the new serial settings.")
+            if new["recording"] != old["recording"]:
+                self.voice.restart.set()
             if new["tiles"] != old["tiles"]:
                 self.tiles = TileCache(new, new["data_dir"])
                 self.sat_tiles = TileCache(new, new["data_dir"], "sat")
@@ -246,16 +250,22 @@ class App:
         log.info("replay finished")
 
     def housekeeping(self):
-        last_prune = 0
+        last_prune = last_voice_hk = 0
         while not self.stop.wait(10):
             try:
                 self.alerts.check_overdue()
                 self.channel.tick(self.now())
+                if time.time() - last_voice_hk > 300:
+                    self.voice.housekeeping()
+                    last_voice_hk = time.time()
                 if time.time() - last_prune > 3600:
                     self.store.prune(self.cfg["keep_days"])
                     if self.cfg["keep_days"]:
                         cutoff = time.time() - self.cfg["keep_days"] * 86400
-                        self.channel.prune(cutoff)
+                        for rel in self.channel.prune(cutoff):
+                            f = self.voice.file_for(rel)
+                            if f:
+                                os.unlink(f)
                         self.coverage.prune(cutoff)
                     last_prune = time.time()
             except Exception as e:
@@ -284,6 +294,7 @@ def main(argv=None):
     log.info("web on http://%s:%d", cfg["web"]["host"], cfg["web"]["port"])
     threading.Thread(target=app.housekeeping, daemon=True).start()
     threading.Thread(target=app.poller.run, daemon=True, name="poller").start()
+    threading.Thread(target=app.voice.run, daemon=True, name="voice").start()
 
     signal.signal(signal.SIGTERM, lambda *_: app.stop.set())
     try:

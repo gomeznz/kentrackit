@@ -55,3 +55,5 @@ tr.new td { animation: flashrow 2s ease-out; }
 .tip .row2 { display: flex; align-items: center; gap: 6px; }
 .tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+.pcol { width: 34px; padding-right: 0 !important; }
+body.has-player .page { padding-bottom: 90px; }

@@ -64,13 +64,13 @@
       <h2>Transmission log</h2>
       <div class="row">
         <select id="log-kind"><option value="">All traffic</option><option value="voice">Voice</option>
-          <option value="data">Data</option><option value="poll">Polls</option></select>
+          <option value="data">Data</option><option value="poll">Polls</option><option value="rec">Recorded calls</option></select>
         <a id="log-csv" class="btn" href="#">CSV</a>
       </div>
     </div>
     <div class="table-wrap log-wrap">
       <table class="rep">
-        <thead><tr><th>Time</th><th class="n">Length</th><th>Type</th><th>Unit</th><th>Display</th></tr></thead>
+        <thead><tr><th class="pcol"></th><th>Time</th><th class="n">Length</th><th>Type</th><th>Unit</th><th>Display</th></tr></thead>
         <tbody id="log-rows"></tbody>
       </table>
     </div>
@@ -78,6 +78,7 @@
 </div>
 <div id="tip" class="tip" hidden></div>
 <script src="/static/common.js"></script>
+<script src="/static/player.js"></script>
 <script src="/static/channel.js"></script>
 </body>
 </html>

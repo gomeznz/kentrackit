@@ -36,6 +36,10 @@ added once the poll command has been captured (see *Roadmap*).
 - **Smart polling** (Settings → Polling, off by default): moving units often, parked units
   rarely, emergencies constantly, waits for a clear channel, Poll now from the map. Test mode
   plans the schedule without transmitting. Needs the poll command captured from KAS-20
+- **Voice recording** (Settings → Voice recording): every voice call recorded from the monitor
+  radio's audio, filed in the transmission log, played back from the Channel page or a unit's
+  panel (Recent calls). Opus (~2 kB/s) or WAV, own retention period, pauses if the disk gets low.
+  Dispatchers and administrators can listen; every playback is audited
 - **Raw serial capture** (Settings → Diagnostics): record what the radio sends without stopping
   the service, to decode voice-call IDs, status messages, emergencies or the KAS-20 poll
 - **Users and access control:** sign-in page, Administrator / Dispatcher / Viewer roles, optional
@@ -120,6 +124,16 @@ unit, a status change and an emergency):
 PYTHONPATH=. python3 tools/simulate.py --hours 3 > demo.log
 python3 -m radio_avl --config test.json --replay demo.log
 ```
+
+## Voice recording hardware
+
+The NX radio decodes the NXDN voice itself, so KenTrackIt records its audio output; nothing
+needs to decode AMBE+2. Connect the monitor radio's receive audio (accessory connector or speaker
+line) to a USB sound card or a K5TRA board on the Pi. It must be a **different** sound card from
+AirBridge's, as ALSA devices can only be opened by one program. Pick it under Settings → Voice
+recording and use the level meter (aim for peaks around −12 dB; set gain with `alsamixer`).
+
+Make sure the customer has agreed to voice logging and their staff know calls are recorded.
 
 ## Testing polling without radios
 

@@ -228,6 +228,55 @@
     <div class="actions"><a class="btn" href="/reports">Open reports</a><button type="submit">Save</button></div>
   </form>
 
+  <!-- Voice recording -->
+  <form class="card" data-section="recording" id="voice-card">
+    <h2>Voice recording</h2>
+    <p class="help">Records every voice transmission from the monitor radio's audio output and files it in the
+      transmission log, ready to play back from the map or the Channel page. Dispatchers and administrators can
+      listen; every playback is written to the audit log. Plug the radio's receive audio (accessory or speaker
+      output) into a USB sound card or K5TRA board on the Pi. It must be a different one from AirBridge's:
+      a sound card can only be used by one program.</p>
+    <label class="check"><input type="checkbox" id="vr-on"> Record voice calls</label>
+    <div class="two">
+      <label>Sound card
+        <select id="vr-dev"></select>
+        <input id="vr-dev-custom" placeholder="plughw:CARD=Device,DEV=0" hidden>
+      </label>
+      <label>Input level
+        <div class="meter"><div class="meter-fill" id="vr-meter"></div><div class="meter-peak" id="vr-peak"></div></div>
+        <span class="hint" id="vr-level">–</span>
+      </label>
+    </div>
+    <p class="help">Talk on a radio and aim for peaks around −12 dB (the meter's yellow band). Turn the radio's
+      volume or the sound card's input gain (<code>alsamixer</code>) up or down to suit.</p>
+    <div class="two">
+      <label>Format
+        <select id="vr-fmt"><option value="opus">Opus, compact (about 2 kB per second)</option><option value="wav">WAV, uncompressed (about 32 kB per second)</option></select>
+      </label>
+      <label>Keep recordings for <span class="unit-input"><input id="vr-keep" type="number" min="0" max="3650" required>days (0 = forever)</span></label>
+    </div>
+    <details>
+      <summary>Advanced</summary>
+      <div class="two">
+        <label>Sample rate <select id="vr-rate"><option>8000</option><option>16000</option><option>24000</option><option>48000</option></select></label>
+        <label>Opus bitrate <span class="unit-input"><input id="vr-br" type="number" min="6" max="64">kbit/s</span></label>
+      </div>
+      <div class="two">
+        <label>Start recording before the channel opens <span class="unit-input"><input id="vr-pre" type="number" min="0" max="2000">ms</span></label>
+        <label>Keep recording after it closes <span class="unit-input"><input id="vr-hang" type="number" min="0" max="3000">ms</span></label>
+      </div>
+      <div class="two">
+        <label>Pause recording when free disk falls below <span class="unit-input"><input id="vr-free" type="number" min="100" max="100000">MB</span></label>
+        <label class="check"><input type="checkbox" id="vr-voiceonly"> Discard data bursts (position reports)</label>
+      </div>
+    </details>
+    <div class="status-grid">
+      <div><span class="k">Recorder</span><span id="vr-st">–</span></div>
+      <div><span class="k">Recordings</span><span id="vr-usage">–</span></div>
+    </div>
+    <div class="actions"><a class="btn" href="/channel">Listen on the Channel page</a><button type="submit">Save</button></div>
+  </form>
+
   <!-- Polling -->
   <form class="card" data-section="polling">
     <h2>Polling</h2>

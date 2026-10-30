@@ -3,10 +3,10 @@
 set -e
 [ "$(id -u)" = 0 ] || { echo "Run with sudo"; exit 1; }
 
-apt-get install -y python3-serial >/dev/null
+apt-get install -y python3-serial alsa-utils opus-tools >/dev/null
 
 id radio-avl >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin radio-avl
-usermod -aG dialout radio-avl
+usermod -aG dialout,audio radio-avl
 
 mkdir -p /opt/radio-avl /etc/radio-avl /var/lib/radio-avl
 rm -rf /opt/radio-avl/radio_avl

@@ -35,6 +35,10 @@ class Channel:
         self.db, self.lock = app.store.db, app.store.lock
         with self.lock:
             self.db.executescript(SCHEMA)
+            cols = {r[1] for r in self.db.execute("PRAGMA table_info(transmissions)")}
+            if "audio" not in cols:       # v0.6: voice recording file (relative path) and its length
+                self.db.execute("ALTER TABLE transmissions ADD COLUMN audio TEXT")
+                self.db.execute("ALTER TABLE transmissions ADD COLUMN audio_s REAL")
         self.mx = threading.Lock()
         self.busy_since = None
         self.last_clear = 0.0
@@ -53,6 +57,7 @@ class Channel:
                 self.busy_since = t
                 self.cur = {"data": False, "unit": None, "texts": []}
                 self.stuck_alerted = False
+                self.app.voice.busy_start(t)
                 self.app.broker.publish("onair", {"busy": True, "since": t, "unit": None, "kind": None}, sticky=True)
             elif not busy and self.busy_since is not None:
                 self._finish(t)
@@ -105,9 +110,11 @@ class Channel:
         dur = max(0.0, t - start)
         self.app.broker.publish("onair", {"busy": False, "t": t}, sticky=True)
         if dur < 0.05:
+            self.app.voice.busy_end(None)
             return
         kind = "data" if cur["data"] else "voice"
-        self.record(start, t, kind, cur["unit"], " / ".join(cur["texts"])[:300])
+        tx = self.record(start, t, kind, cur["unit"], " / ".join(cur["texts"])[:300])
+        self.app.voice.busy_end(tx)
 
     def record(self, start, end, kind, unit_id=None, display="", detail=None):
         with self.lock, self.db:
@@ -120,8 +127,28 @@ class Channel:
         return tx
 
     # ---- queries -----------------------------------------------------------------
-    def log(self, t0, t1, unit_id=None, kind=None, limit=500, allowed=None):
-        q, args = "SELECT id, start, end, duration, kind, unit_id, display FROM transmissions WHERE start BETWEEN ? AND ?", [t0, t1]
+    def attach_audio(self, tx_id, rel_path, seconds):
+        with self.lock, self.db:
+            self.db.execute("UPDATE transmissions SET audio=?, audio_s=? WHERE id=?", (rel_path, seconds, tx_id))
+
+    def get(self, tx_id):
+        with self.lock:
+            r = self.db.execute("SELECT id, start, end, duration, kind, unit_id, display, audio, audio_s "
+                                "FROM transmissions WHERE id=?", (tx_id,)).fetchone()
+        return dict(r) if r else None
+
+    def expire_audio(self, cutoff):
+        """Forget recordings older than cutoff; returns their relative paths so the files can go."""
+        with self.lock, self.db:
+            rows = [r[0] for r in self.db.execute("SELECT audio FROM transmissions WHERE audio IS NOT NULL AND start < ?", (cutoff,))]
+            self.db.execute("UPDATE transmissions SET audio=NULL, audio_s=NULL WHERE audio IS NOT NULL AND start < ?", (cutoff,))
+        return rows
+
+    def log(self, t0, t1, unit_id=None, kind=None, limit=500, allowed=None, with_audio=False):
+        q, args = ("SELECT id, start, end, duration, kind, unit_id, display, audio IS NOT NULL AS has_audio, audio_s "
+                   "FROM transmissions WHERE start BETWEEN ? AND ?"), [t0, t1]
+        if with_audio:
+            q += " AND audio IS NOT NULL"
         if unit_id:
             q += " AND unit_id=?"; args.append(unit_id)
         if kind:
@@ -194,5 +221,8 @@ class Channel:
         }
 
     def prune(self, cutoff):
+        """Delete old transmissions; returns the recordings that belonged to them."""
         with self.lock, self.db:
+            gone = [r[0] for r in self.db.execute("SELECT audio FROM transmissions WHERE start < ? AND audio IS NOT NULL", (cutoff,))]
             self.db.execute("DELETE FROM transmissions WHERE start < ?", (cutoff,))
+        return gone

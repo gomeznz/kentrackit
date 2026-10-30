@@ -61,3 +61,9 @@ table.users tr.off td { opacity: .55; }
 ul.audit { list-style: none; margin: 0; padding: 0; font-size: 12.5px; max-height: 340px; overflow-y: auto; }
 ul.audit li { display: flex; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 ul.audit time { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.meter { position: relative; height: 14px; margin-top: 6px; border-radius: 4px; overflow: hidden;
+         background: linear-gradient(90deg, var(--bg) 0 70%, color-mix(in srgb, #eab308 25%, var(--bg)) 70% 90%, color-mix(in srgb, #dc2626 25%, var(--bg)) 90%); border: 1px solid var(--line); }
+.meter-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #16a34a; transition: width .25s; }
+.meter-peak { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); left: 0; transition: left .25s; }
+details { margin: 4px 0 12px; }
+details summary { cursor: pointer; font-size: 13px; font-weight: 550; color: var(--muted); margin-bottom: 10px; }
