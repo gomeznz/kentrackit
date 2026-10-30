@@ -188,7 +188,7 @@ li.alert.acked { opacity: .6; }
 #w-clock { font: 600 26px var(--mono); }
 #w-exit { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.4); }
 body.wall #side { display: none; }
-body.wall .unit-icon .label { font-size: 15px; padding: 2px 8px; }
+body.wall .ulabel { font-size: 15px; padding: 3px 9px 3px 8px; }
 body.wall .unit-icon .pin { transform: scale(1.3); }
 body.wall #toasts { top: 64px; }
 body.wall #emergency { top: 64px; width: min(900px, calc(100% - 24px)); }
@@ -220,3 +220,20 @@ header .title-row { flex: none; }
 .title-row .logo { width: 26px; height: 26px; border-radius: 7px; flex: none; }
 .top .title-row .logo { width: 28px; height: 28px; }
 #wallbar .logo { width: 30px; height: 30px; border-radius: 8px; margin-right: -12px; }
+
+/* unit labels placed clear of each other, joined to the unit by a leader line */
+.unit-labels, .leaders { position: absolute; inset: 0; pointer-events: none; }
+.leaders { width: 100%; height: 100%; z-index: 640; overflow: visible; }
+.unit-labels { z-index: 645; }
+.unit-labels.hiding, .leaders.hiding { visibility: hidden; }
+.leaders line { stroke-width: 1.6; stroke-linecap: round; }
+.leaders .st-lost { opacity: .45; }
+.ulabel { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: auto; cursor: pointer;
+          font: 600 12px var(--font); background: rgba(255,255,255,.94); color: #1d2330; padding: 2px 7px 2px 6px;
+          border-radius: 4px; border-left: 3px solid #888; box-shadow: 0 1px 4px rgba(0,0,0,.28);
+          will-change: transform; }
+.ulabel:hover { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.ulabel.st-stale { color: #7c5a12; }
+.ulabel.st-lost { opacity: .55; }
+.ulabel.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ulabel.emerg { background: #dc2626; color: #fff; }

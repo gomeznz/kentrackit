@@ -75,10 +75,109 @@
       a.style.transform = `rotate(${u.last_course}deg)`;
       box.appendChild(a);
     }
-    box.append(pin, el("div", "label", label(u)));
+    box.append(pin);
     return L.divIcon({ html: box, className: "", iconSize: [0, 0] });
   }
-  const refreshIcons = () => { for (const e of units.values()) if (e.marker) e.marker.setIcon(icon(e.data)); };
+  const refreshIcons = () => { for (const e of units.values()) if (e.marker) e.marker.setIcon(icon(e.data)); scheduleLabels(); };
+
+  // ---- unit labels ---------------------------------------------------------
+  // Each label is placed in the nearest clear spot around its unit (away from other labels,
+  // unit markers and zone names) and joined back to the unit with a leader line.
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const labelLayer = el("div", "unit-labels");
+  const leaders = document.createElementNS(SVGNS, "svg"); leaders.setAttribute("class", "leaders");
+  map.getContainer().append(leaders, labelLayer);
+  const labelEls = new Map();            // unit id -> {node, text, w, h, wall}
+  let labelsQueued = false;
+  function scheduleLabels() {
+    if (labelsQueued) return;
+    labelsQueued = true;
+    requestAnimationFrame(layoutLabels);
+  }
+  map.on("move zoomend resize viewreset", scheduleLabels);
+  map.on("zoomstart", () => { labelLayer.classList.add("hiding"); leaders.classList.add("hiding"); });
+  map.on("zoomend", () => { labelLayer.classList.remove("hiding"); leaders.classList.remove("hiding"); });
+
+  const ANGLES = [-40, -140, 40, 140, 0, 180, -90, 90].map((d) => d * Math.PI / 180);
+  const RADII = [14, 30, 52, 80, 115];
+  const overlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) *
+                            Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+
+  function layoutLabels() {
+    labelsQueued = false;
+    const box = map.getContainer().getBoundingClientRect(), W = box.width, H = box.height;
+    const em = emergencyUnits(), isWall = document.body.classList.contains("wall");
+    const visible = [...units.values()].filter((e) => e.marker).map((e) => {
+      const p = map.latLngToContainerPoint(e.marker.getLatLng());
+      return { e, p };
+    }).filter(({ p }) => p.x > -150 && p.y > -60 && p.x < W + 150 && p.y < H + 60);
+    const rank = ({ e }) => (selected === e.data.id ? 0 : em.has(e.data.id) ? 1 : state(e.data) === "live" ? 2 : state(e.data) === "stale" ? 3 : 4);
+    visible.sort((a, b) => rank(a) - rank(b) || label(a.e.data).localeCompare(label(b.e.data), undefined, { numeric: true }));
+
+    // things to keep clear of: every unit marker, and the zone name labels
+    const obstacles = visible.map(({ p }) => ({ x: p.x - 12, y: p.y - 12, w: 24, h: 24 }));
+    for (const z of map.getContainer().querySelectorAll(".zone-label")) {
+      const r = z.getBoundingClientRect();
+      if (r.width) obstacles.push({ x: r.left - box.left - 3, y: r.top - box.top - 2, w: r.width + 6, h: r.height + 4 });
+    }
+
+    const seen = new Set(), placed = [];
+    leaders.replaceChildren();
+    for (const { e, p } of visible) {
+      const u = e.data, id = u.id, text = label(u);
+      seen.add(id);
+      let L1 = labelEls.get(id);
+      if (!L1) {
+        const node = el("div", "ulabel");
+        node.onclick = () => select(id, false);
+        labelLayer.appendChild(node);
+        L1 = { node }; labelEls.set(id, L1);
+      }
+      if (L1.text !== text || L1.wall !== isWall) {
+        L1.node.textContent = text; L1.text = text; L1.wall = isWall;
+        L1.node.style.transform = "translate(-9999px,0)";
+        L1.w = L1.node.offsetWidth; L1.h = L1.node.offsetHeight;
+      }
+      L1.node.className = `ulabel st-${state(u)}${selected === id ? " sel" : ""}${em.has(id) ? " emerg" : ""}`;
+      L1.node.style.borderLeftColor = colour(u);
+      const w = L1.w, h = L1.h;
+
+      let best = null, bestCost = Infinity;
+      search:
+      for (const r of RADII) {
+        for (const a of ANGLES) {
+          const cx = p.x + Math.cos(a) * (r + w / 2), cy = p.y + Math.sin(a) * (r + h / 2);
+          const rect = { x: cx - w / 2, y: cy - h / 2, w, h };
+          let cost = 0;
+          for (const o of obstacles) if (o.x !== p.x - 12 || o.y !== p.y - 12) cost += overlap(rect, o);
+          for (const o of placed) cost += overlap(rect, o) * 3;
+          if (rect.x < 2 || rect.y < 2 || rect.x + w > W - 2 || rect.y + h > H - 2) cost += w * h * 0.5;
+          cost += r * 0.5;                                    // prefer close to the unit
+          if (cost < bestCost) { bestCost = cost; best = rect; }
+          if (cost <= r * 0.5) break search;                 // completely clear: take it
+        }
+      }
+      placed.push(best);
+      L1.node.style.transform = `translate(${Math.round(best.x)}px, ${Math.round(best.y)}px)`;
+
+      // leader from the edge of the marker to the nearest point of the label
+      const qx = Math.max(best.x, Math.min(p.x, best.x + w)), qy = Math.max(best.y, Math.min(p.y, best.y + h));
+      const dx = qx - p.x, dy = qy - p.y, d = Math.hypot(dx, dy);
+      if (d > 11) {
+        const line = document.createElementNS(SVGNS, "line");
+        line.setAttribute("x1", p.x + dx / d * 10); line.setAttribute("y1", p.y + dy / d * 10);
+        line.setAttribute("x2", qx); line.setAttribute("y2", qy);
+        line.setAttribute("stroke", em.has(id) ? "#dc2626" : colour(u));
+        line.setAttribute("class", "st-" + state(u));
+        leaders.appendChild(line);
+        const dot = document.createElementNS(SVGNS, "circle");
+        dot.setAttribute("cx", qx); dot.setAttribute("cy", qy); dot.setAttribute("r", 2.2);
+        dot.setAttribute("fill", em.has(id) ? "#dc2626" : colour(u)); dot.setAttribute("class", "st-" + state(u));
+        leaders.appendChild(dot);
+      }
+    }
+    for (const [id, L1] of labelEls) if (!seen.has(id)) { L1.node.remove(); labelEls.delete(id); }
+  }
 
   function upsert(u, z) {
     let e = units.get(u.id);
@@ -90,6 +189,7 @@
       if (!e.marker) e.marker = L.marker(ll, { icon: icon(u) }).addTo(map).on("click", () => select(u.id));
       else { e.marker.setLatLng(ll); e.marker.setIcon(icon(u)); }
     }
+    scheduleLabels();
   }
 
   // ---- tabs ------------------------------------------------------------
@@ -362,6 +462,7 @@
       layer.on("click", () => { if (tab === "zones" && !drawing && can("zones")) editZone(z); });
       zoneLayer.addLayer(layer);
     }
+    scheduleLabels();
     $("zone-count").textContent = zones.length || "";
     const ul = $("zones"); ul.replaceChildren();
     if (!zones.length) ul.appendChild(el("li", "empty", "No zones yet. Add a circle (e.g. a depot) or draw an area."));
@@ -486,7 +587,7 @@
     $("wallbar").hidden = !on;
     if (on && fullscreen && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
     if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    setTimeout(() => { map.invalidateSize(); if (on) fitAll(); }, 250);
+    setTimeout(() => { map.invalidateSize(); if (on) fitAll(); scheduleLabels(); }, 250);
   }
   function fitAll() {
     const live = [...units.values()].filter((e) => e.marker && state(e.data) !== "lost");
@@ -541,6 +642,7 @@
       const id = JSON.parse(m.data).id, e = units.get(id);
       if (e && e.marker) map.removeLayer(e.marker);
       units.delete(id);
+      scheduleLabels();
       if (selected === id) $("d-close").click();
       renderList();
     });
