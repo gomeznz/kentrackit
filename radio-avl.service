@@ -1,0 +1,20 @@
+[Unit]
+Description=Radio AVL (Kenwood NXDN position tracking)
+After=network.target
+
+[Service]
+User=radio-avl
+Group=radio-avl
+SupplementaryGroups=dialout
+WorkingDirectory=/opt/radio-avl
+ExecStart=/usr/bin/python3 -m radio_avl --config /etc/radio-avl/config.json
+Restart=always
+RestartSec=5
+# Shares the Pi with AirBridge: stay out of the way of real-time audio
+Nice=10
+CPUSchedulingPolicy=batch
+IOSchedulingClass=idle
+MemoryMax=200M
+
+[Install]
+WantedBy=multi-user.target

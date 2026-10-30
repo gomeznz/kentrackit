@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KenTrackIt</title>
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<aside id="side">
+  <header>
+    <h1 id="title">KenTrackIt</h1>
+    <div class="leds">
+      <span class="led" id="led-link" title="Radio serial link"><i></i>Link</span>
+      <span class="led" id="led-chan" title="Channel activity"><i></i>Channel</span>
+    </div>
+  </header>
+  <div id="display" class="display" title="What the monitor radio's display is showing">—</div>
+
+  <section id="units-sec">
+    <div class="sec-head"><h2>Units</h2><span id="unit-count" class="muted"></span></div>
+    <input id="filter" type="search" placeholder="Filter units…" autocomplete="off">
+    <ul id="units"></ul>
+  </section>
+
+  <section id="detail" hidden>
+    <div class="sec-head">
+      <h2 id="d-name"></h2>
+      <button id="d-close" class="icon" title="Close">✕</button>
+    </div>
+    <dl class="kv">
+      <dt>Unit ID</dt><dd id="d-id"></dd>
+      <dt>Last report</dt><dd id="d-seen"></dd>
+      <dt>Speed / course</dt><dd id="d-motion"></dd>
+      <dt>Position</dt><dd id="d-pos"></dd>
+    </dl>
+    <form id="d-edit" class="row">
+      <input id="d-alias" placeholder="Name (e.g. Truck 4)" maxlength="40">
+      <input id="d-colour" type="color" title="Marker colour">
+      <button type="submit">Save</button>
+    </form>
+
+    <h3>History</h3>
+    <div class="row seg" id="ranges">
+      <button data-h="1">1 h</button><button data-h="6">6 h</button>
+      <button data-h="24">24 h</button><button data-h="168">7 d</button>
+    </div>
+    <div class="row">
+      <input type="datetime-local" id="t-from"><input type="datetime-local" id="t-to">
+      <button id="t-load">Load</button>
+    </div>
+    <div id="play" hidden>
+      <div class="row">
+        <button id="p-play" class="icon" title="Play / pause">▶</button>
+        <input type="range" id="p-slider" min="0" value="0">
+        <select id="p-speed" title="Playback speed">
+          <option value="10">10×</option><option value="60" selected>60×</option>
+          <option value="300">300×</option><option value="1200">1200×</option>
+        </select>
+      </div>
+      <div id="p-info" class="muted"></div>
+      <div class="row">
+        <a id="p-csv" class="btn" href="#">Export CSV</a>
+        <button id="p-clear">Clear track</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="log-sec">
+    <div class="sec-head"><h2>Activity</h2></div>
+    <ul id="log"></ul>
+  </section>
+</aside>
+<main id="map"></main>
+<script src="/static/vendor/leaflet.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

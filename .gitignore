@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+data/
+test-data/
+test.json
+*.log
+*.jsonl
