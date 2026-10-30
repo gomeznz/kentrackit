@@ -202,3 +202,8 @@ body.wall .leaflet-top { top: 50px; }
 }
 #zones li.empty, #units li.empty { display: block; cursor: default; padding: 10px 2px; }
 #zones li.empty:hover, #units li.empty:hover { background: none; }
+.basemap-switch { display: flex; overflow: hidden; }
+.basemap-switch button { border: 0; border-radius: 0; background: #fff; color: #1d2330; font: 600 12px var(--font); padding: 6px 10px; cursor: pointer; }
+.basemap-switch button + button { border-left: 1px solid #ccc; }
+.basemap-switch button.on { background: #1d2330; color: #fff; }
+.on-sat .zone-label { color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 2px #000; }

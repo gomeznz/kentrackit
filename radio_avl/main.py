@@ -23,7 +23,7 @@ from .web import Broker, TileCache, serve, rebind
 log = logging.getLogger("radio-avl")
 
 class App:
-    VERSION = "0.3"
+    VERSION = "0.3.1"
 
     def __init__(self, cfg, config_path=None, mode="serial"):
         self.cfg = cfg
@@ -34,6 +34,7 @@ class App:
         self.broker = Broker()
         self.alerts = AlertEngine(self)
         self.tiles = TileCache(cfg, cfg["data_dir"])
+        self.sat_tiles = TileCache(cfg, cfg["data_dir"], "sat")
         self.servers = []
         self.auth_cache = set()
         self.cfg_lock = threading.Lock()
@@ -71,6 +72,7 @@ class App:
                 notes.append("Reconnecting to the radio with the new serial settings.")
             if new["tiles"] != old["tiles"]:
                 self.tiles = TileCache(new, new["data_dir"])
+                self.sat_tiles = TileCache(new, new["data_dir"], "sat")
             if (new["web"]["username"], new["web"]["password_hash"]) != \
                (old["web"]["username"], old["web"]["password_hash"]):
                 self.auth_cache.clear()

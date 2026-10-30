@@ -20,7 +20,7 @@ from . import config as config_mod
 from . import geo, reports
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
-TILE_RE = re.compile(r"^/tiles/(\d{1,2})/(\d{1,7})/(\d{1,7})$")
+TILE_RE = re.compile(r"^/tiles/(sat/)?(\d{1,2})/(\d{1,7})/(\d{1,7})$")
 UNIT_RE = re.compile(r"^/api/units/([A-Za-z0-9_.-]{1,32})$")
 FENCE_RE = re.compile(r"^/api/geofences/(\d{1,9})$")
 ACK_RE = re.compile(r"^/api/alerts/(\d{1,12})/ack$")
@@ -74,11 +74,14 @@ class TileCache:
     """Serves map tiles from disk and fetches/stores them when upstream is reachable.
     Each map source has its own cache folder, so switching sources never mixes tiles."""
 
-    def __init__(self, cfg, data_dir):
-        self.upstream, self.attribution, key = config_mod.tile_settings(cfg)
+    def __init__(self, cfg, data_dir, layer="map"):
+        if layer == "sat":
+            self.upstream, self.attribution, key, self.max_zoom = config_mod.sat_settings(cfg)
+        else:
+            self.upstream, self.attribution, key = config_mod.tile_settings(cfg)
+            self.max_zoom = int(cfg["tiles"].get("max_zoom", 18))
         self.root = os.path.join(data_dir, "tiles")
         self.dir = os.path.join(self.root, key)
-        self.max_zoom = int(cfg["tiles"].get("max_zoom", 18))
         self.ua = "KenTrackIt/0.2 (Raspberry Pi AVL; single-site tile cache)"
 
     def enabled(self):
@@ -268,6 +271,9 @@ def make_handler(app):
                     "tiles": app.tiles.enabled(),
                     "attribution": app.tiles.attribution,
                     "max_zoom": app.tiles.max_zoom,
+                    "satellite": app.sat_tiles.enabled(),
+                    "sat_attribution": app.sat_tiles.attribution,
+                    "sat_max_zoom": app.sat_tiles.max_zoom,
                     "now": app.now(),
                 })
             if p == "/api/settings":
@@ -312,7 +318,8 @@ def make_handler(app):
                 return self._stream()
             m = TILE_RE.match(p)
             if m:
-                data = app.tiles.get(*map(int, m.groups()))
+                cache = app.sat_tiles if m.group(1) else app.tiles
+                data = cache.get(*map(int, m.groups()[1:]))
                 if data is None:
                     return self._send(404, b"", "text/plain")
                 return self._send(200, data, _sniff(data), {"Cache-Control": "max-age=604800"})

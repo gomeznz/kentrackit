@@ -20,6 +20,15 @@ TILE_SOURCES = {
     "none": {"url": "", "attribution": "", "max_zoom": 19},
 }
 
+SAT_SOURCES = {
+    "esri": {"url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+             "attribution": "Imagery &copy; Esri, Maxar, Earthstar Geographics", "max_zoom": 19},
+    "linz_aerial": {"url": TILE_SOURCES["linz_aerial"]["url"],
+                    "attribution": TILE_SOURCES["linz_aerial"]["attribution"], "max_zoom": 21},
+    "custom": {"url": "", "attribution": "", "max_zoom": 20},
+    "none": {"url": "", "attribution": "", "max_zoom": 19},
+}
+
 DEFAULTS = {
     "serial": {"port": "/dev/ttyUSB0", "baud": 9600},
     "data_dir": "data",
@@ -32,6 +41,7 @@ DEFAULTS = {
                "emergency_keywords": "emergency, emerg, man down"},
     "reports": {"stop_min": 5, "stop_radius_m": 60},
     "tiles": {"source": "osm", "linz_key": "", "custom_url": "", "custom_attribution": "",
+              "satellite": "esri", "sat_custom_url": "", "sat_custom_attribution": "",
               "max_zoom": 18},
     "drop_bad_checksum": True,
 }
@@ -125,6 +135,22 @@ def tile_settings(cfg):
     if src == "none":
         return "", "", "none"
     return TILE_SOURCES["osm"]["url"], TILE_SOURCES["osm"]["attribution"], "osm"
+
+
+def sat_settings(cfg):
+    """-> (upstream url template or '', attribution, cache key, max zoom) for satellite imagery."""
+    t = cfg["tiles"]
+    src = t.get("satellite", "esri")
+    meta = SAT_SOURCES.get(src, SAT_SOURCES["none"])
+    if src == "linz_aerial":
+        url = meta["url"].replace("{key}", t["linz_key"]) if t.get("linz_key") else ""
+        return url, meta["attribution"], "sat-linz", meta["max_zoom"]
+    if src == "custom":
+        url = t.get("sat_custom_url", "")
+        return url, t.get("sat_custom_attribution", ""), "sat-custom-" + hashlib.sha1(url.encode()).hexdigest()[:8], meta["max_zoom"]
+    if src == "esri":
+        return meta["url"], meta["attribution"], "sat-esri", meta["max_zoom"]
+    return "", "", "sat-none", meta["max_zoom"]
 
 
 def public(cfg):
@@ -245,6 +271,21 @@ def apply_patch(cfg, patch):
             new["tiles"]["custom_attribution"] = str(t["custom_attribution"])[:200]
         if "max_zoom" in t:
             new["tiles"]["max_zoom"] = _num(t["max_zoom"], 10, 22, "Max zoom", True)
+        if "satellite" in t:
+            if t["satellite"] not in SAT_SOURCES:
+                raise Invalid("Unknown satellite source")
+            new["tiles"]["satellite"] = t["satellite"]
+        if "sat_custom_url" in t:
+            u = str(t["sat_custom_url"]).strip()
+            if u and not (re.match(r"^https?://", u) and all(x in u for x in ("{z}", "{x}", "{y}"))):
+                raise Invalid("Custom satellite URL must be http(s) and contain {z}, {x} and {y}")
+            new["tiles"]["sat_custom_url"] = u
+        if "sat_custom_attribution" in t:
+            new["tiles"]["sat_custom_attribution"] = str(t["sat_custom_attribution"])[:200]
+        if new["tiles"]["satellite"] == "linz_aerial" and not new["tiles"]["linz_key"]:
+            raise Invalid("LINZ aerial needs an API key (free from basemaps.linz.govt.nz)")
+        if new["tiles"]["satellite"] == "custom" and not new["tiles"]["sat_custom_url"]:
+            raise Invalid("Enter a custom satellite tile URL")
         if new["tiles"]["source"] == "linz_aerial" and not new["tiles"]["linz_key"]:
             raise Invalid("LINZ aerial needs an API key (free from basemaps.linz.govt.nz)")
         if new["tiles"]["source"] == "custom" and not new["tiles"]["custom_url"]:

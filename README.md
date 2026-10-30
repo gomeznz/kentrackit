@@ -112,7 +112,12 @@ they can be identified later.
 
 ## Map tiles
 
-Choose the source under **Settings → Map**: OpenStreetMap (default), LINZ aerial imagery (free
+Every map has a **Map / Satellite** switch (bottom right); the choice is remembered per browser.
+Satellite imagery comes from Esri World Imagery out of the box (no key; commercial use is under
+Esri's terms) or LINZ aerial imagery, which is sharper across NZ and licensed CC BY 4.0. Set it
+under **Settings → Map → Satellite imagery**.
+
+Choose the street map source under **Settings → Map**: OpenStreetMap (default), LINZ aerial imagery (free
 API key from basemaps.linz.govt.nz), a custom tile server, or none. Tiles are cached on the Pi
 per source, so switching back and forth doesn't mix them. If the Pi has no internet on site, pan
 around the operating area once at the workshop and the map then works offline.

@@ -16,7 +16,7 @@
 
   // ---- map -----------------------------------------------------------
   const map = L.map("map", { zoomControl: true }).setView(cfg.map.center, cfg.map.zoom);
-  if (cfg.tiles) L.tileLayer("/tiles/{z}/{x}/{y}", { maxZoom: cfg.max_zoom, attribution: cfg.attribution }).addTo(map);
+  KTBasemap(map, cfg);
   L.control.scale({ imperial: false }).addTo(map);
   const zoneLayer = L.layerGroup().addTo(map);
   const trailLayer = L.layerGroup().addTo(map);

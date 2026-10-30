@@ -89,6 +89,25 @@
       <label>Attribution <input id="tile-attr" maxlength="200"></label>
     </div>
     <label>Maximum zoom <input id="tile-maxzoom" type="number" min="10" max="22"></label>
+
+    <label>Satellite imagery (the Map / Satellite switch on the map)
+      <select id="sat-source">
+        <option value="linz_aerial">LINZ aerial (best for NZ, free API key, CC BY 4.0)</option>
+        <option value="esri">Esri World Imagery (no key needed)</option>
+        <option value="custom">Custom imagery server</option>
+        <option value="none">None (hide the switch)</option>
+      </select>
+    </label>
+    <p class="help" id="sat-help-esri">Esri imagery works straight away but is lower resolution
+      outside cities, and commercial use is under Esri's terms. LINZ aerial is sharper across NZ and
+      licensed for commercial use: get a free key at basemaps.linz.govt.nz and enter it above or below.</p>
+    <label id="sat-linz-wrap" hidden>LINZ API key
+      <input id="sat-linz" placeholder="from basemaps.linz.govt.nz" autocomplete="off">
+    </label>
+    <div id="sat-custom-wrap" hidden>
+      <label>Imagery tile URL <input id="sat-url" placeholder="https://example.com/{z}/{x}/{y}.jpg"></label>
+      <label>Attribution <input id="sat-attr" maxlength="200"></label>
+    </div>
     <p class="help">Tiles are saved on the Pi as they're viewed. Pan around the operating area
       once while the Pi has internet and the map then works offline.
       Cached: <span id="tile-usage">–</span>
@@ -216,6 +235,7 @@
   </section>
 </div>
 <script src="/static/vendor/leaflet.js"></script>
+<script src="/static/basemap.js"></script>
 <script src="/static/settings.js"></script>
 </body>
 </html>

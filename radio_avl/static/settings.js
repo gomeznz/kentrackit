@@ -70,15 +70,23 @@
     $("tile-linz").value = ""; $("tile-linz").placeholder = t.linz_key_set ? "key saved; enter a new one to replace" : "from basemaps.linz.govt.nz";
     $("tile-url").value = t.custom_url || ""; $("tile-attr").value = t.custom_attribution || "";
     $("tile-maxzoom").value = t.max_zoom;
+    $("sat-source").value = t.satellite;
+    $("sat-linz").value = ""; $("sat-linz").placeholder = t.linz_key_set ? "key saved; enter a new one to replace" : "from basemaps.linz.govt.nz";
+    $("sat-url").value = t.sat_custom_url || ""; $("sat-attr").value = t.sat_custom_attribution || "";
     showTileFields();
     mini.setView(S.map.center, S.map.zoom);
     pendingView = null; $("view-text").textContent = viewText(S.map.center, S.map.zoom);
   }
   function showTileFields() {
+    const sat = $("sat-source").value, keySet = S && S.tiles.linz_key_set;
+    $("sat-linz-wrap").hidden = sat !== "linz_aerial" || $("tile-source").value === "linz_aerial";
+    $("sat-custom-wrap").hidden = sat !== "custom";
+    $("sat-help-esri").hidden = sat !== "esri" && !(sat === "linz_aerial" && !keySet);
     $("linz-wrap").hidden = $("tile-source").value !== "linz_aerial";
     $("custom-wrap").hidden = $("tile-source").value !== "custom";
   }
   $("tile-source").onchange = showTileFields;
+  $("sat-source").onchange = showTileFields;
 
   function fillDisplay() {
     $("disp-stale").value = S.display.stale_after_s;
@@ -169,7 +177,7 @@
   // ---- mini map for start view ------------------------------------------------
   const mini = L.map("mini-map", { attributionControl: false });
   const cfgPublic = await api("/api/config");
-  if (cfgPublic.tiles) L.tileLayer("/tiles/{z}/{x}/{y}", { maxZoom: cfgPublic.max_zoom }).addTo(mini);
+  KTBasemap(mini, cfgPublic, { noSave: true });
   let pendingView = null;
   const viewText = (c, z) => `${(+c[0]).toFixed(4)}, ${(+c[1]).toFixed(4)} at zoom ${z}`;
   $("use-view").onclick = () => {
@@ -207,7 +215,10 @@
     map: () => {
       const t = { source: $("tile-source").value, custom_url: $("tile-url").value,
                   custom_attribution: $("tile-attr").value, max_zoom: +$("tile-maxzoom").value };
-      if ($("tile-linz").value.trim()) t.linz_key = $("tile-linz").value.trim();
+      t.satellite = $("sat-source").value;
+      t.sat_custom_url = $("sat-url").value; t.sat_custom_attribution = $("sat-attr").value;
+      const key = $("tile-linz").value.trim() || $("sat-linz").value.trim();
+      if (key) t.linz_key = key;
       const p = { tiles: t };
       if (pendingView) p.map = pendingView;
       return p;
