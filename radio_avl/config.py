@@ -1,0 +1,252 @@
+"""Configuration: defaults, load/save, validation, password hashing."""
+import copy
+import hashlib
+import hmac
+import ipaddress
+import json
+import logging
+import os
+import re
+
+log = logging.getLogger("radio-avl")
+
+BAUDS = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]
+TILE_SOURCES = {
+    "osm": {"url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+            "attribution": "&copy; OpenStreetMap contributors", "max_zoom": 19},
+    "linz_aerial": {"url": "https://basemaps.linz.govt.nz/v1/tiles/aerial/WebMercatorQuad/{z}/{x}/{y}.webp?api={key}",
+                    "attribution": "&copy; LINZ CC BY 4.0", "max_zoom": 20},
+    "custom": {"url": "", "attribution": "", "max_zoom": 19},
+    "none": {"url": "", "attribution": "", "max_zoom": 19},
+}
+
+DEFAULTS = {
+    "serial": {"port": "/dev/ttyUSB0", "baud": 9600},
+    "data_dir": "data",
+    "keep_days": 365,
+    "web": {"host": "0.0.0.0", "port": 8090, "title": "KenTrackIt",
+            "username": "admin", "password_hash": ""},
+    "map": {"center": [-46.413, 168.353], "zoom": 12},
+    "display": {"stale_after_s": 60, "lost_after_s": 900, "speed_units": "kmh"},
+    "tiles": {"source": "osm", "linz_key": "", "custom_url": "", "custom_attribution": "",
+              "max_zoom": 18},
+    "drop_bad_checksum": True,
+}
+
+
+# ---- passwords -----------------------------------------------------------
+def hash_password(pw: str) -> str:
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt, 200_000)
+    return f"pbkdf2_sha256$200000${salt.hex()}${dk.hex()}"
+
+
+def check_password(pw: str, stored: str) -> bool:
+    try:
+        algo, n, salt, dk = stored.split("$")
+        calc = hashlib.pbkdf2_hmac("sha256", pw.encode(), bytes.fromhex(salt), int(n))
+        return algo == "pbkdf2_sha256" and hmac.compare_digest(calc.hex(), dk)
+    except (ValueError, AttributeError):
+        return False
+
+
+# ---- load / save -----------------------------------------------------------
+def merge(base, over):
+    out = copy.deepcopy(base)
+    for k, v in (over or {}).items():
+        out[k] = merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
+
+
+def _migrate(cfg):
+    """Accept configs from v0.1."""
+    web = cfg.get("web", {})
+    if web.get("password"):
+        web["password_hash"] = hash_password(web.pop("password"))
+    web.pop("password", None)
+    t = cfg.get("tiles", {})
+    if "upstream" in t:
+        up = t.pop("upstream")
+        if up == TILE_SOURCES["osm"]["url"]:
+            t.setdefault("source", "osm")
+        elif up:
+            t.setdefault("source", "custom")
+            t.setdefault("custom_url", up)
+            t.setdefault("custom_attribution", t.get("attribution", ""))
+        else:
+            t.setdefault("source", "none")
+        t.pop("attribution", None)
+    return cfg
+
+
+def load(path):
+    raw = {}
+    if path and os.path.exists(path):
+        with open(path) as f:
+            raw = json.load(f)
+    elif path:
+        log.warning("config %s not found, using defaults", path)
+    migrated = "password" in raw.get("web", {}) or "upstream" in raw.get("tiles", {})
+    cfg = merge(DEFAULTS, _migrate(raw))
+    if path and not os.path.isabs(cfg["data_dir"]):
+        cfg["data_dir"] = os.path.join(os.path.dirname(os.path.abspath(path)), cfg["data_dir"])
+    if migrated and path:
+        try:
+            save(path, cfg)
+        except OSError as e:
+            log.warning("could not update config file: %s", e)
+    return cfg
+
+
+def save(path, cfg):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(cfg, f, indent=2)
+        f.write("\n")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+
+
+def tile_settings(cfg):
+    """-> (upstream url template or '', attribution, cache key)."""
+    t = cfg["tiles"]
+    src = t.get("source", "osm")
+    if src == "linz_aerial":
+        if not t.get("linz_key"):
+            return "", TILE_SOURCES[src]["attribution"], src
+        return TILE_SOURCES[src]["url"].replace("{key}", t["linz_key"]), TILE_SOURCES[src]["attribution"], src
+    if src == "custom":
+        url = t.get("custom_url", "")
+        key = "custom-" + hashlib.sha1(url.encode()).hexdigest()[:8]
+        return url, t.get("custom_attribution", ""), key
+    if src == "none":
+        return "", "", "none"
+    return TILE_SOURCES["osm"]["url"], TILE_SOURCES["osm"]["attribution"], "osm"
+
+
+def public(cfg):
+    """Config as shown in the settings page (no secrets)."""
+    out = copy.deepcopy(cfg)
+    out["web"]["password_set"] = bool(out["web"].pop("password_hash", ""))
+    out["tiles"]["linz_key_set"] = bool(out["tiles"].get("linz_key"))
+    out["tiles"]["linz_key"] = ""
+    return out
+
+
+# ---- validation ------------------------------------------------------------
+class Invalid(ValueError):
+    pass
+
+
+def _num(v, lo, hi, name, integer=False):
+    try:
+        x = int(v) if integer else float(v)
+        if integer and float(v) != int(v):
+            raise ValueError
+    except (TypeError, ValueError):
+        raise Invalid(f"{name} must be a number")
+    if not lo <= x <= hi:
+        raise Invalid(f"{name} must be between {lo} and {hi}")
+    return x
+
+
+def apply_patch(cfg, patch):
+    """Return a new validated config with `patch` applied. Raises Invalid."""
+    new = copy.deepcopy(cfg)
+
+    s = patch.get("serial")
+    if s is not None:
+        if "port" in s:
+            p = str(s["port"]).strip()
+            if not re.fullmatch(r"/dev/[A-Za-z0-9_./:+-]{1,200}", p) or ".." in p:
+                raise Invalid("Serial port must be a /dev/... path")
+            new["serial"]["port"] = p
+        if "baud" in s:
+            b = _num(s["baud"], 0, 10**7, "Baud rate", True)
+            if b not in BAUDS:
+                raise Invalid("Baud rate must be one of " + ", ".join(map(str, BAUDS)))
+            new["serial"]["baud"] = b
+
+    w = patch.get("web")
+    if w is not None:
+        if "host" in w:
+            h = str(w["host"]).strip()
+            try:
+                ipaddress.ip_address(h)
+            except ValueError:
+                raise Invalid("Listen address must be an IP address, e.g. 0.0.0.0")
+            new["web"]["host"] = h
+        if "port" in w:
+            new["web"]["port"] = _num(w["port"], 1024, 65535, "Web port", True)
+        if "title" in w:
+            t = str(w["title"]).strip()
+            if not 1 <= len(t) <= 60:
+                raise Invalid("Title must be 1-60 characters")
+            new["web"]["title"] = t
+        if "username" in w:
+            u = str(w["username"]).strip()
+            if not re.fullmatch(r"[A-Za-z0-9._-]{1,32}", u):
+                raise Invalid("Username: 1-32 letters, numbers, . _ -")
+            new["web"]["username"] = u
+        if w.get("clear_password"):
+            new["web"]["password_hash"] = ""
+        elif w.get("new_password"):
+            pw = str(w["new_password"])
+            if len(pw) < 6:
+                raise Invalid("Password must be at least 6 characters")
+            new["web"]["password_hash"] = hash_password(pw)
+
+    m = patch.get("map")
+    if m is not None:
+        if "center" in m:
+            c = m["center"]
+            if not isinstance(c, (list, tuple)) or len(c) != 2:
+                raise Invalid("Map centre must be [lat, lon]")
+            new["map"]["center"] = [round(_num(c[0], -90, 90, "Latitude"), 6),
+                                    round(_num(c[1], -180, 180, "Longitude"), 6)]
+        if "zoom" in m:
+            new["map"]["zoom"] = _num(m["zoom"], 1, 19, "Zoom", True)
+
+    d = patch.get("display")
+    if d is not None:
+        if "stale_after_s" in d:
+            new["display"]["stale_after_s"] = _num(d["stale_after_s"], 10, 86400, "Stale after", True)
+        if "lost_after_s" in d:
+            new["display"]["lost_after_s"] = _num(d["lost_after_s"], 20, 30 * 86400, "Lost after", True)
+        if "speed_units" in d:
+            if d["speed_units"] not in ("kmh", "knots"):
+                raise Invalid("Speed units must be kmh or knots")
+            new["display"]["speed_units"] = d["speed_units"]
+        if new["display"]["lost_after_s"] <= new["display"]["stale_after_s"]:
+            raise Invalid("'Lost after' must be longer than 'stale after'")
+
+    t = patch.get("tiles")
+    if t is not None:
+        if "source" in t:
+            if t["source"] not in TILE_SOURCES:
+                raise Invalid("Unknown map source")
+            new["tiles"]["source"] = t["source"]
+        if t.get("linz_key"):
+            k = str(t["linz_key"]).strip()
+            if not re.fullmatch(r"[A-Za-z0-9_-]{8,100}", k):
+                raise Invalid("LINZ API key doesn't look right")
+            new["tiles"]["linz_key"] = k
+        if "custom_url" in t:
+            u = str(t["custom_url"]).strip()
+            if u and not (re.match(r"^https?://", u) and all(x in u for x in ("{z}", "{x}", "{y}"))):
+                raise Invalid("Custom tile URL must be http(s) and contain {z}, {x} and {y}")
+            new["tiles"]["custom_url"] = u
+        if "custom_attribution" in t:
+            new["tiles"]["custom_attribution"] = str(t["custom_attribution"])[:200]
+        if "max_zoom" in t:
+            new["tiles"]["max_zoom"] = _num(t["max_zoom"], 10, 22, "Max zoom", True)
+        if new["tiles"]["source"] == "linz_aerial" and not new["tiles"]["linz_key"]:
+            raise Invalid("LINZ aerial needs an API key (free from basemaps.linz.govt.nz)")
+        if new["tiles"]["source"] == "custom" and not new["tiles"]["custom_url"]:
+            raise Invalid("Enter a custom tile URL")
+
+    if "keep_days" in patch:
+        new["keep_days"] = _num(patch["keep_days"], 0, 3650, "Keep history", True)
+    if "drop_bad_checksum" in patch:
+        new["drop_bad_checksum"] = bool(patch["drop_bad_checksum"])
+    return new

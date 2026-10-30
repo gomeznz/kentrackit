@@ -3,7 +3,7 @@
 A Raspberry Pi replacement for Kenwood KAS-20. It reads GPS reports from a Kenwood NX-series
 radio's data port and shows the units on a live map in any browser on the network.
 
-**Version 0.1 only listens.** It runs alongside KAS-20 and never transmits. Polling will be
+**It only listens for now.** It runs alongside KAS-20 and never transmits. Polling will be
 added once the poll command has been captured (see *Roadmap*).
 
 ## What it does
@@ -16,6 +16,9 @@ added once the poll command has been captured (see *Roadmap*).
   map then works offline
 - Corrects its own clock from GPS time if the Pi's clock is wrong (no RTC or NTP on site)
 - Logs sequence-counter gaps from the radio, which show if any serial data was lost
+- Settings page for every option (`/settings`, or the ⚙ on the map)
+- Plays nicely with other services on the same Pi: checks a web port is free before using it,
+  lists the ports already taken, and picks the radio's serial adapter by its stable name
 - Runs at low CPU and I/O priority so it stays out of AirBridge's way
 
 ## Install on the Pi
@@ -26,19 +29,17 @@ git clone https://github.com/gomeznz/kentrackit.git && cd kentrackit
 sudo ./install.sh
 ```
 
-The installer lists the serial adapters it can see. Edit the config file:
+The installer picks a free web port (8090, or the next free one if another service has it),
+starts the service and prints the address. Open `http://<pi-address>:<port>/settings` and:
 
-```bash
-sudo nano /etc/radio-avl/config.json
-```
+1. **Radio connection:** pick the radio's serial adapter and baud rate (9600 worked for the
+   capture). The status box shows frames arriving.
+2. **Web access:** set a password. If you change the port, the page checks it's free first and
+   then moves you to the new address.
+3. **Map:** choose the map source and set the start view.
 
-- `serial.port`: use the `/dev/serial/by-id/...` path, not `/dev/ttyUSB0`. The by-id path
-  doesn't change when other USB devices are plugged in or the Pi reboots.
-- `serial.baud`: the same value you used with `nxdn_listen.py` (9600 worked).
-- `web.password`: set one. The username defaults to `admin`.
-- `map.center`: where the map opens before any unit has reported.
-
-Then run `sudo systemctl restart radio-avl` and open `http://<pi-address>:8090`.
+Settings are saved to `/etc/radio-avl/config.json` and take effect straight away. The only
+exception is changing the listen address, which needs **Restart service** (bottom of the page).
 
 Logs: `journalctl -u radio-avl -f`
 
@@ -82,16 +83,10 @@ they can be identified later.
 
 ## Map tiles
 
-By default tiles come from OpenStreetMap through the Pi's cache, which is fine for one
-dispatch screen. If the Pi has no internet on site, load the area once at the workshop.
-For aerial imagery, LINZ Basemaps works with a free API key:
-
-```json
-"tiles": { "upstream": "https://basemaps.linz.govt.nz/v1/tiles/aerial/WebMercatorQuad/{z}/{x}/{y}.webp?api=YOUR_KEY",
-           "attribution": "&copy; LINZ CC BY 4.0" }
-```
-
-If you change the tile source, delete `/var/lib/radio-avl/tiles/`.
+Choose the source under **Settings → Map**: OpenStreetMap (default), LINZ aerial imagery (free
+API key from basemaps.linz.govt.nz), a custom tile server, or none. Tiles are cached on the Pi
+per source, so switching back and forth doesn't mix them. If the Pi has no internet on site, pan
+around the operating area once at the workshop and the map then works offline.
 
 ## Roadmap
 

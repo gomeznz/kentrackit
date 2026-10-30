@@ -24,6 +24,9 @@ section { padding: 10px 16px; border-top: 1px solid var(--line); }
 .muted { color: var(--muted); font-size: 12px; }
 
 .leds { display: flex; gap: 10px; font-size: 12px; color: var(--muted); }
+.gear { color: var(--muted); text-decoration: none; font-size: 17px; line-height: 1; margin-left: 2px; }
+.gear:hover { color: var(--accent); }
+.leds { align-items: center; }
 .led { display: inline-flex; align-items: center; gap: 5px; }
 .led i { width: 9px; height: 9px; border-radius: 50%; background: var(--lost); display: inline-block; }
 .led.up i { background: var(--live); }

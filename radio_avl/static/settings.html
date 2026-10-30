@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings</title>
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/settings.css">
+</head>
+<body class="settings">
+<div class="page">
+  <header class="top">
+    <a href="/" class="back">← Map</a>
+    <h1><span id="s-title">KenTrackIt</span> settings</h1>
+  </header>
+
+  <div id="warn" class="banner" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <!-- Radio -->
+  <form class="card" data-section="serial">
+    <h2>Radio connection</h2>
+    <p class="help">The serial adapter the monitor radio is plugged into. Pick the adapter by
+      name: <code>/dev/serial/by-id/…</code> paths don't change when other USB devices are
+      added, so this service never grabs another service's port.</p>
+    <label>Serial port
+      <select id="serial-port"></select>
+    </label>
+    <label id="serial-custom-wrap" hidden>Custom path
+      <input id="serial-custom" placeholder="/dev/ttyUSB0">
+    </label>
+    <label>Baud rate <select id="serial-baud"></select></label>
+    <div class="status-grid">
+      <div><span class="k">Link</span><span id="st-link">–</span></div>
+      <div><span class="k">Last data</span><span id="st-last">–</span></div>
+      <div><span class="k">Frames / positions</span><span id="st-frames">–</span></div>
+      <div><span class="k">Sequence gaps</span><span id="st-gaps">–</span></div>
+    </div>
+    <div class="actions"><button type="submit">Save</button></div>
+  </form>
+
+  <!-- Web -->
+  <form class="card" data-section="web">
+    <h2>Web access</h2>
+    <label>Page title <input id="web-title" maxlength="60" required></label>
+    <div class="two">
+      <label>Port
+        <input id="web-port" type="number" min="1024" max="65535" required>
+        <span id="port-check" class="hint"></span>
+      </label>
+      <label>Listen on
+        <select id="web-host">
+          <option value="0.0.0.0">All networks (0.0.0.0)</option>
+          <option value="127.0.0.1">This Pi only (127.0.0.1)</option>
+          <option value="::">All networks, IPv4 + IPv6 (::)</option>
+        </select>
+      </label>
+    </div>
+    <p class="help">Ports already in use on this Pi: <span id="ports-used">–</span></p>
+    <div class="two">
+      <label>Username <input id="web-user" maxlength="32" required autocomplete="username"></label>
+      <label>New password
+        <input id="web-pass" type="password" minlength="6" autocomplete="new-password"
+               placeholder="leave blank to keep">
+      </label>
+    </div>
+    <label class="check" id="clear-pass-wrap" hidden><input type="checkbox" id="web-clear-pass">
+      Remove the password (anyone on the network can view and change settings)</label>
+    <div class="actions"><button type="submit">Save</button></div>
+  </form>
+
+  <!-- Map -->
+  <form class="card" data-section="map">
+    <h2>Map</h2>
+    <label>Map source
+      <select id="tile-source">
+        <option value="osm">OpenStreetMap</option>
+        <option value="linz_aerial">LINZ aerial imagery (NZ, free API key)</option>
+        <option value="custom">Custom tile server</option>
+        <option value="none">None (positions on a blank background)</option>
+      </select>
+    </label>
+    <label id="linz-wrap" hidden>LINZ API key
+      <input id="tile-linz" placeholder="from basemaps.linz.govt.nz" autocomplete="off">
+    </label>
+    <div id="custom-wrap" hidden>
+      <label>Tile URL <input id="tile-url" placeholder="https://example.com/{z}/{x}/{y}.png"></label>
+      <label>Attribution <input id="tile-attr" maxlength="200"></label>
+    </div>
+    <label>Maximum zoom <input id="tile-maxzoom" type="number" min="10" max="22"></label>
+    <p class="help">Tiles are saved on the Pi as they're viewed. Pan around the operating area
+      once while the Pi has internet and the map then works offline.
+      Cached: <span id="tile-usage">–</span>
+      <button type="button" id="tile-clear" class="link">Clear cache</button></p>
+
+    <h3>Start view</h3>
+    <p class="help">Where the map opens before any unit has reported. Move the map below, then
+      press <em>Use this view</em>.</p>
+    <div id="mini-map"></div>
+    <div class="row">
+      <button type="button" id="use-view">Use this view</button>
+      <span id="view-text" class="hint"></span>
+    </div>
+    <div class="actions"><button type="submit">Save</button></div>
+  </form>
+
+  <!-- Display -->
+  <form class="card" data-section="display">
+    <h2>Display</h2>
+    <div class="two">
+      <label>Show as stale after
+        <span class="unit-input"><input id="disp-stale" type="number" min="10" max="86400" required>seconds</span>
+      </label>
+      <label>Show as lost after
+        <span class="unit-input"><input id="disp-lost" type="number" min="1" max="43200" required>minutes</span>
+      </label>
+    </div>
+    <p class="help">KAS-20 currently polls about every 19 s, so 60 s stale gives a couple of
+      missed polls before a unit changes colour.</p>
+    <label>Speed in
+      <select id="disp-speed"><option value="kmh">km/h</option><option value="knots">knots</option></select>
+    </label>
+    <div class="actions"><button type="submit">Save</button></div>
+  </form>
+
+  <!-- Units -->
+  <section class="card">
+    <h2>Units</h2>
+    <p class="help">Units appear here automatically the first time they report.</p>
+    <table class="units">
+      <thead><tr><th>ID</th><th>Name</th><th>Colour</th><th>Last report</th><th></th></tr></thead>
+      <tbody id="unit-rows"></tbody>
+    </table>
+  </section>
+
+  <!-- Data -->
+  <form class="card" data-section="data">
+    <h2>History and data</h2>
+    <label>Keep history for
+      <span class="unit-input"><input id="keep-days" type="number" min="0" max="3650" required>days (0 = forever)</span>
+    </label>
+    <label class="check"><input type="checkbox" id="drop-bad">
+      Ignore position reports with a bad checksum</label>
+    <div class="status-grid">
+      <div><span class="k">Stored positions</span><span id="st-pos">–</span></div>
+      <div><span class="k">Oldest</span><span id="st-oldest">–</span></div>
+      <div><span class="k">Database</span><span id="st-db">–</span></div>
+      <div><span class="k">Free disk</span><span id="st-disk">–</span></div>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/api/backup.db">Download backup</a>
+      <a class="btn" href="/api/export.csv?from=0">Export all positions (CSV)</a>
+      <button type="submit">Save</button>
+    </div>
+  </form>
+
+  <!-- System -->
+  <section class="card">
+    <h2>System</h2>
+    <div class="status-grid">
+      <div><span class="k">Version</span><span id="sys-ver">–</span></div>
+      <div><span class="k">Host</span><span id="sys-host">–</span></div>
+      <div><span class="k">Running for</span><span id="sys-up">–</span></div>
+      <div><span class="k">Clock</span><span id="sys-clock">–</span></div>
+      <div><span class="k">Config file</span><span id="sys-cfg">–</span></div>
+      <div><span class="k">Data folder</span><span id="sys-data">–</span></div>
+    </div>
+    <div class="actions"><button type="button" id="restart" class="danger">Restart service</button></div>
+  </section>
+</div>
+<script src="/static/vendor/leaflet.js"></script>
+<script src="/static/settings.js"></script>
+</body>
+</html>

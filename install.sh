@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install or upgrade Radio AVL on a Raspberry Pi.  From the unpacked folder:  sudo ./install.sh
+# Install or upgrade KenTrackIt on a Raspberry Pi.  From the repo folder:  sudo ./install.sh
 set -e
 [ "$(id -u)" = 0 ] || { echo "Run with sudo"; exit 1; }
 
@@ -13,12 +13,22 @@ rm -rf /opt/radio-avl/radio_avl
 cp -r radio_avl /opt/radio-avl/
 chown -R radio-avl:radio-avl /var/lib/radio-avl
 
-if [ ! -f /etc/radio-avl/config.json ]; then
-  cp config.example.json /etc/radio-avl/config.json
-  echo "Created /etc/radio-avl/config.json"
+CFG=/etc/radio-avl/config.json
+if [ ! -f "$CFG" ]; then
+  cp config.example.json "$CFG"
+  # This Pi runs other services: don't start on a port something else already has
+  PORT=8090
+  while ss -ltnH "sport = :$PORT" 2>/dev/null | grep -q .; do PORT=$((PORT + 1)); done
+  sed -i "s/\"port\": 8090/\"port\": $PORT/" "$CFG"
+  # Use the first USB serial adapter, by its stable by-id name
+  DEV=$(ls /dev/serial/by-id/* 2>/dev/null | head -1 || true)
+  [ -n "$DEV" ] && sed -i "s#/dev/serial/by-id/CHANGE-ME#$DEV#" "$CFG"
+  echo "Created $CFG (web port $PORT)"
 fi
-chmod 640 /etc/radio-avl/config.json
-chgrp radio-avl /etc/radio-avl/config.json
+# The settings page saves changes here, so the service must own it
+chown radio-avl:radio-avl /etc/radio-avl "$CFG"
+chmod 700 /etc/radio-avl
+chmod 600 "$CFG"
 
 cp radio-avl.service /etc/systemd/system/
 systemctl daemon-reload
@@ -27,8 +37,6 @@ systemctl restart radio-avl
 sleep 2
 systemctl --no-pager --lines=5 status radio-avl || true
 
+PORT=$(python3 -c "import json;print(json.load(open('$CFG'))['web']['port'])")
 echo
-echo "Serial adapters on this Pi (put the radio's one in /etc/radio-avl/config.json):"
-ls -l /dev/serial/by-id/ 2>/dev/null || echo "  none found"
-echo
-echo "Web UI: http://$(hostname -I | awk '{print $1}'):8090"
+echo "Open http://$(hostname -I | awk '{print $1}'):$PORT/settings to finish setting up."

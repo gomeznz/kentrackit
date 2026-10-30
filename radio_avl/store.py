@@ -94,6 +94,23 @@ class Store:
             self.db.execute("INSERT INTO events (rx_time, kind, unit_id, detail) VALUES (?,?,?,?)",
                             (rx_time or time.time(), kind, unit_id, detail))
 
+    def delete_unit(self, unit_id):
+        with self.lock, self.db:
+            self.db.execute("DELETE FROM positions WHERE unit_id=?", (unit_id,))
+            self.db.execute("DELETE FROM units WHERE id=?", (unit_id,))
+
+    def backup_to(self, path):
+        dest = sqlite3.connect(path)
+        with self.lock:
+            self.db.backup(dest)
+        dest.close()
+
+    def counts(self):
+        with self.lock:
+            p = self.db.execute("SELECT COUNT(*), MIN(rx_time) FROM positions").fetchone()
+            u = self.db.execute("SELECT COUNT(*) FROM units").fetchone()[0]
+        return {"positions": p[0], "oldest": p[1], "units": u}
+
     def prune(self, keep_days):
         if not keep_days:
             return

@@ -240,6 +240,13 @@
       }
       logLine(d.rx_time, `${label(d.unit)} ${d.valid ? "reported · " + speed(d.speed_kn) : "reported, no GPS fix"}`);
     });
+    es.addEventListener("unit_removed", (m) => {
+      const id = JSON.parse(m.data).id, e = units.get(id);
+      if (e && e.marker) map.removeLayer(e.marker);
+      units.delete(id);
+      if (selected === id) $("d-close").click();
+      renderList();
+    });
     es.addEventListener("unit", (m) => { upsert(JSON.parse(m.data)); renderList(); renderDetail(); });
     es.addEventListener("channel", (m) => {
       const d = JSON.parse(m.data);
