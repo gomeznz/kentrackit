@@ -200,3 +200,5 @@ body.wall .leaflet-top { top: 50px; }
   #map-wrap { height: 52%; flex: none; }
   .tools .tool { padding: 4px 6px; }
 }
+#zones li.empty, #units li.empty { display: block; cursor: default; padding: 10px 2px; }
+#zones li.empty:hover, #units li.empty:hover { background: none; }
