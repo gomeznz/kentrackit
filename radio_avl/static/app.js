@@ -19,6 +19,8 @@
   $("t-me").title = `${fullName} (${me.role_label}): my account and sign out`;
   $("t-settings").hidden = !can("settings");
   $("t-reports").hidden = !can("reports");
+  $("t-channel").hidden = !can("reports");
+  $("d-poll").hidden = !can("poll") || cfg.polling_mode === "off";
   $("d-edit").hidden = !can("units");
   $("p-csv").hidden = !can("export");
   $("p-report").hidden = !can("reports");
@@ -64,11 +66,13 @@
   const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour12: false });
   const stamp = (t) => new Date(t * 1000).toLocaleString([], { hour12: false });
   const zoneNames = (ids) => (ids || []).map((id) => (zones.find((z) => z.id === id) || {}).name).filter(Boolean);
+  let onair = { busy: false };
+  const talking = (id) => onair.busy && onair.unit === id;
   const emergencyUnits = () => new Set(alerts.filter((a) => !a.ack_time && a.severity === "critical" && a.unit_id).map((a) => a.unit_id));
 
   function icon(u) {
     const moving = u.last_speed_kn != null && u.last_speed_kn > 1.5 && u.last_course != null;
-    const box = el("div", `unit-icon st-${state(u)}${selected === u.id ? " sel" : ""}${emergencyUnits().has(u.id) ? " emerg" : ""}`);
+    const box = el("div", `unit-icon st-${state(u)}${selected === u.id ? " sel" : ""}${emergencyUnits().has(u.id) ? " emerg" : ""}${talking(u.id) ? " talking" : ""}`);
     const pin = el("div", "pin"); pin.style.background = colour(u);
     if (moving) {
       const a = el("div", "arrow"); a.style.color = colour(u);
@@ -138,7 +142,7 @@
         L1.node.style.transform = "translate(-9999px,0)";
         L1.w = L1.node.offsetWidth; L1.h = L1.node.offsetHeight;
       }
-      L1.node.className = `ulabel st-${state(u)}${selected === id ? " sel" : ""}${em.has(id) ? " emerg" : ""}`;
+      L1.node.className = `ulabel st-${state(u)}${selected === id ? " sel" : ""}${em.has(id) ? " emerg" : ""}${talking(id) ? " talking" : ""}`;
       L1.node.style.borderLeftColor = colour(u);
       const w = L1.w, h = L1.h;
 
@@ -266,6 +270,14 @@
     if (e && e.marker) map.setView(e.marker.getLatLng(), Math.max(map.getZoom(), 15));
   }
   $("d-follow").onclick = () => setFollow(!following);
+  $("d-poll").onclick = async () => {
+    if (!selected) return;
+    $("d-poll").disabled = true; $("d-poll-result").textContent = "Polling…";
+    try { const r = await post(`/api/units/${encodeURIComponent(selected)}/poll`, {});
+          if (r.mode === "dry_run") $("d-poll-result").textContent = "Queued (test mode: nothing is sent)"; }
+    catch (e) { $("d-poll-result").textContent = e.message; }
+    setTimeout(() => { $("d-poll").disabled = false; }, 3000);
+  };
   $("d-close").onclick = () => {
     selected = null; setFollow(false); $("detail").hidden = true; clearTrack();
     refreshIcons(); renderList();
@@ -372,6 +384,48 @@
     loadTrails();
   }
   $("t-trails").onclick = () => setTrails(!trailsOn);
+
+  // ---- coverage overlay --------------------------------------------------------
+  const covLayer = L.layerGroup();
+  let covOn = store.get("coverage", false), covDays = store.get("coverageDays", 7), covT = null;
+  const cellFor = (z) => z >= 16 ? 75 : z >= 15 ? 100 : z >= 14 ? 150 : z >= 13 ? 250 : z >= 12 ? 400 : z >= 11 ? 700 : 1200;
+  // diverging: red (missed) <-> gray midpoint <-> blue (heard)
+  const covColour = (pct) => {
+    const stops = [[0, [208, 59, 59]], [50, [160, 160, 155]], [100, [42, 120, 214]]];
+    const [a, b] = pct <= 50 ? [stops[0], stops[1]] : [stops[1], stops[2]];
+    const f = (pct - a[0]) / (b[0] - a[0]);
+    return `rgb(${a[1].map((v, i) => Math.round(v + (b[1][i] - v) * f)).join(",")})`;
+  };
+  async function loadCoverage() {
+    covLayer.clearLayers();
+    if (!covOn) return;
+    const t1 = now(), t0 = t1 - covDays * 86400;
+    const d = await (await fetch(`/api/coverage?from=${t0}&to=${t1}&cell=${cellFor(map.getZoom())}`)).json();
+    const maxN = Math.max(1, ...d.cells.map((c) => c.heard + c.missed));
+    for (const c of d.cells) {
+      const n = c.heard + c.missed, col = covColour(c.pct);
+      L.rectangle([[c.s, c.w], [c.n, c.e]], { stroke: false, fillColor: col, fillOpacity: 0.18 + 0.4 * Math.min(1, Math.sqrt(n / maxN)), interactive: true })
+        .bindTooltip(`${c.pct.toFixed(0)}% heard · ${c.heard} heard, ${c.missed} missed${c.inferred ? ` (${c.inferred} inferred)` : ""}`, { sticky: true })
+        .addTo(covLayer);
+    }
+    $("cov-note").textContent = d.samples ? `${d.samples.toLocaleString()} samples, ${d.cell_m} m squares` : "No samples yet in this period";
+  }
+  function setCoverage(on) {
+    covOn = on; store.set("coverage", on);
+    $("t-coverage").setAttribute("aria-pressed", on);
+    $("cov-legend").hidden = !on;
+    if (on) { covLayer.addTo(map); covLayer.eachLayer(() => {}); } else map.removeLayer(covLayer);
+    loadCoverage();
+  }
+  $("t-coverage").onclick = () => setCoverage(!covOn);
+  for (const b of document.querySelectorAll("#cov-legend .cov-range button")) {
+    b.classList.toggle("on", +b.dataset.d === covDays);
+    b.onclick = () => { covDays = +b.dataset.d; store.set("coverageDays", covDays);
+      for (const x of document.querySelectorAll("#cov-legend .cov-range button")) x.classList.toggle("on", x === b); loadCoverage(); };
+  }
+  map.on("zoomend", () => { if (covOn) { clearTimeout(covT); covT = setTimeout(loadCoverage, 250); } });
+  setInterval(() => { if (covOn) loadCoverage(); }, 120000);
+  setCoverage(covOn);
 
   // ---- sound -------------------------------------------------------------
   let soundOn = store.get("sound", true);
@@ -663,6 +717,31 @@
       renderAlerts();
     });
     es.addEventListener("geofences", (m) => { zones = JSON.parse(m.data); renderZones(); renderList(); });
+    let onairTick = null;
+    es.addEventListener("onair", (m) => {
+      const prev = onair.unit;
+      onair = JSON.parse(m.data);
+      clearInterval(onairTick);
+      const disp = $("display");
+      if (onair.busy) {
+        const who = onair.unit && units.has(onair.unit) ? label(units.get(onair.unit).data) : "";
+        const upd = () => { disp.textContent = `● ON AIR${who ? " · " + who : ""}${onair.kind === "data" ? " (data)" : ""} · ${Math.max(0, Math.round(now() - onair.since))} s`; };
+        disp.classList.add("onair"); upd(); onairTick = setInterval(upd, 1000);
+      } else disp.classList.remove("onair");
+      if (prev !== onair.unit || !onair.busy) refreshIcons();
+    });
+    es.addEventListener("tx", (m) => {
+      const t = JSON.parse(m.data);
+      if (t.kind !== "voice") return;
+      const who = t.unit_id && units.has(t.unit_id) ? label(units.get(t.unit_id).data) : "Someone";
+      logLine(t.start, `${who} talked for ${t.duration < 10 ? t.duration.toFixed(1) : Math.round(t.duration)} s`);
+    });
+    es.addEventListener("poll", (m) => {
+      const d = JSON.parse(m.data);
+      if (selected !== d.unit) return;
+      const msg = { sent: "Poll sent…", answered: `Answered in ${d.rtt} s`, missed: "No answer", dry_run: "Test mode: would poll now" }[d.result];
+      if (msg) $("d-poll-result").textContent = msg;
+    });
     es.addEventListener("channel", (m) => {
       const d = JSON.parse(m.data);
       $("led-chan").className = "led" + (d.busy ? " busy" : "");
@@ -675,6 +754,7 @@
     });
     es.addEventListener("display", (m) => {
       const d = JSON.parse(m.data);
+      if (onair.busy) return;
       $("display").textContent = d.fields.filter(Boolean).join("  ·  ") || "—";
     });
     es.addEventListener("signed_out", () => { location.href = "/login"; });

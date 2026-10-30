@@ -26,6 +26,10 @@
       <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="on" d="M16 8a5 5 0 0 1 0 8M18.5 5.5a8.5 8.5 0 0 1 0 13"/><path class="off" d="M16 9l5 6M21 9l-5 6"/></svg>Sound</button>
     <button id="t-wall" class="tool" title="Wall display (full screen)">
       <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>Wall</button>
+    <button id="t-coverage" class="tool" title="Radio coverage from the fleet's own traffic" aria-pressed="false">
+      <svg viewBox="0 0 24 24"><path d="M3 3h6v6H3zM15 3h6v6h-6zM9 9h6v6H9zM3 15h6v6H3zM15 15h6v6h-6z"/></svg>Coverage</button>
+    <a href="/channel" class="tool" id="t-channel" title="Channel activity, airtime and transmission log">
+      <svg viewBox="0 0 24 24"><path d="M2 12h3l3-7 4 14 3-9 2 2h5"/></svg>Channel</a>
     <a href="/reports" class="tool" id="t-reports" title="Trip and stop reports">
       <svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Reports</a>
     <a href="/settings" class="tool" id="t-settings" title="Settings">
@@ -59,6 +63,8 @@
     </dl>
     <div class="row">
       <button id="d-follow" aria-pressed="false">Follow</button>
+      <button id="d-poll" title="Ask this unit for its position now" hidden>Poll now</button>
+      <span id="d-poll-result" class="muted"></span>
     </div>
     <form id="d-edit" class="row">
       <input id="d-alias" placeholder="Name (e.g. Truck 4)" maxlength="40">
@@ -154,6 +160,12 @@
     <button id="em-silence" hidden title="Stops the alarm on this screen only">Silence here</button>
   </div>
   <div id="toasts"></div>
+  <div id="cov-legend" class="cov-legend" hidden>
+    <b>Coverage</b>
+    <div class="cov-scale"><span>missed</span><i></i><span>heard</span></div>
+    <div class="cov-range"><button data-d="1">24 h</button><button data-d="7" class="on">7 d</button><button data-d="30">30 d</button></div>
+    <small id="cov-note"></small>
+  </div>
   <div id="sound-hint" hidden>Click anywhere to enable alert sounds</div>
 </main>
 <script src="/static/common.js"></script>

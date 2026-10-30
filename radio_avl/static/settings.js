@@ -92,6 +92,27 @@
     $("disp-speed").value = S.display.speed_units;
     $("disp-trail").value = S.display.trail_min;
   }
+  function fillPolling() {
+    const P = S.polling;
+    $("pl-mode").value = P.mode; $("pl-cmd").value = P.command; $("pl-fmt").value = P.format; $("pl-units").value = P.units;
+    $("pl-moving").value = P.moving_s; $("pl-parked").value = P.parked_s; $("pl-emerg").value = P.emergency_s;
+    $("pl-timeout").value = P.timeout_s; $("pl-guard").value = P.guard_s; $("pl-max").value = P.max_per_min;
+    plPreview();
+  }
+  function plPreview() {
+    $("pl-live-warn").hidden = $("pl-mode").value !== "live";
+    const cmd = $("pl-cmd").value;
+    if (!cmd) { $("pl-preview").textContent = ""; return; }
+    try {
+      let s = cmd.replace(/\{id\}/g, "U00112").replace(/\{num5\}/g, "00112").replace(/\{num\}/g, "112").replace(/\{seq\}/g, "01");
+      let bytes;
+      if ($("pl-fmt").value === "hex") bytes = (s.replace(/[^0-9a-f]/gi, "").match(/../g) || []).map((h) => parseInt(h, 16));
+      else bytes = [...s.replace(/\\x([0-9a-f]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16))).replace(/\\r/g, "\r").replace(/\\n/g, "\n")].map((c) => c.charCodeAt(0));
+      $("pl-preview").textContent = "Unit 112 would get: " + bytes.map((b) => b.toString(16).padStart(2, "0")).join(" ");
+    } catch (e) { $("pl-preview").textContent = ""; }
+  }
+  $("pl-cmd").oninput = $("pl-fmt").onchange = $("pl-mode").onchange = plPreview;
+
   function fillAlerts() {
     $("al-overdue").value = S.alerts.overdue_min;
     $("al-speed").value = S.alerts.speed_limit_kmh;
@@ -123,6 +144,13 @@
     $("st-oldest").textContent = when(s.store.oldest);
     $("st-db").textContent = bytes(s.db_bytes);
     $("st-disk").textContent = s.disk ? `${bytes(s.disk.free)} of ${bytes(s.disk.total)}` : "–";
+    if (s.poller) {
+      const P = s.poller;
+      $("pl-st-sent").textContent = `${P.sent} / ${P.answered}`;
+      $("pl-st-missed").textContent = P.missed + (Object.keys(P.missed_by_unit).length ? " (" + Object.entries(P.missed_by_unit).map(([u, n]) => `${u}: ${n}`).join(", ") + ")" : "");
+      $("pl-st-dry").textContent = P.dry_run;
+      $("pl-st-last").textContent = P.last ? `${P.last.unit} · ${when(P.last.t)}${P.last.mode === "dry_run" ? " (test)" : ""}` : "–";
+    }
     $("sys-ver").textContent = s.version;
     $("sys-host").textContent = s.hostname;
     $("sys-up").textContent = dur(s.uptime_s);
@@ -219,6 +247,10 @@
     display: () => ({ display: { stale_after_s: +$("disp-stale").value,
       lost_after_s: Math.round(+$("disp-lost").value * 60), speed_units: $("disp-speed").value,
       trail_min: +$("disp-trail").value } }),
+    polling: () => ({ polling: { mode: $("pl-mode").value, command: $("pl-cmd").value, format: $("pl-fmt").value,
+      units: $("pl-units").value, moving_s: +$("pl-moving").value, parked_s: +$("pl-parked").value,
+      emergency_s: +$("pl-emerg").value, timeout_s: +$("pl-timeout").value, guard_s: +$("pl-guard").value,
+      max_per_min: +$("pl-max").value } }),
     alerts: () => ({ alerts: { overdue_min: +$("al-overdue").value, speed_limit_kmh: +$("al-speed").value,
       emergency_keywords: $("al-keywords").value, status_watch: $("al-status").checked } }),
     reports: () => ({ reports: { stop_min: +$("rp-stopmin").value, stop_radius_m: +$("rp-radius").value } }),
@@ -343,8 +375,31 @@
   }
   $("audit-more").onclick = () => { auditLimit += 100; loadAudit(); };
 
+  // ---- raw serial capture -----------------------------------------------------------
+  async function loadCaptures() {
+    const c = await api("/api/captures");
+    const st = c.status;
+    $("cap-start").hidden = st.recording; $("cap-stop").hidden = !st.recording; $("cap-min").disabled = st.recording;
+    $("cap-status").textContent = st.recording ? `Recording ${st.name} until ${new Date(st.until * 1000).toLocaleTimeString([], { hour12: false })} (${bytes(st.bytes)})` : "";
+    const tb = $("cap-files"); tb.replaceChildren();
+    for (const f of c.files) {
+      const tr = document.createElement("tr");
+      const n = document.createElement("td"); n.className = "id"; n.textContent = f.name;
+      const sz = document.createElement("td"); sz.textContent = bytes(f.bytes);
+      const act = document.createElement("td"); act.className = "act";
+      const dl = document.createElement("a"); dl.className = "btn"; dl.textContent = "Download"; dl.href = "/api/captures/" + f.name;
+      const del = document.createElement("button"); del.textContent = "Delete"; del.className = "danger";
+      del.onclick = async () => { await api("/api/captures/" + f.name, { method: "DELETE" }); loadCaptures(); };
+      act.append(dl, " ", del);
+      tr.append(n, sz, act); tb.appendChild(tr);
+    }
+  }
+  $("cap-start").onclick = async () => { await post("/api/captures/start", { minutes: +$("cap-min").value }); toast("Capture started"); loadCaptures(); };
+  $("cap-stop").onclick = async () => { await post("/api/captures/stop", {}); toast("Capture stopped"); loadCaptures(); };
+  setInterval(() => { if (!$("cap-stop").hidden) loadCaptures(); }, 5000);
+
   // ---- load ----------------------------------------------------------------------
-  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillAlerts(); fillData(); fillStatus(); }
+  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
   async function refresh() {
     try { SYS = await api("/api/system"); fillStatus(); } catch (e) { /* offline briefly */ }
   }
@@ -353,6 +408,6 @@
   fillUnits();
   ME = await api("/api/me");
   $("me-link").textContent = (ME.display_name || ME.username) + " ▾";
-  loadUsers(); loadAudit();
+  loadUsers(); loadAudit(); loadCaptures();
   setInterval(refresh, 5000);
 })();

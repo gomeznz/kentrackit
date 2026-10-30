@@ -27,6 +27,8 @@ FENCE_RE = re.compile(r"^/api/geofences/(\d{1,9})$")
 ACK_RE = re.compile(r"^/api/alerts/(\d{1,12})/ack$")
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 USER_RE = re.compile(r"^/api/users/(\d{1,9})$")
+POLL_RE = re.compile(r"^/api/units/([A-Za-z0-9_.-]{1,32})/poll$")
+CAPTURE_RE = re.compile(r"^/api/captures/(capture_\d{8}_\d{6}\.log)$")
 COOKIE = "kt_session"
 PUBLIC = {"/login", "/login/", "/setup", "/setup/", "/api/login", "/api/setup", "/api/auth-status"}
 PRIVATE_EVENTS = {"audit", "settings"}       # only administrators see these in the activity log
@@ -51,6 +53,10 @@ def _visible(user):
             return data["id"] in allowed
         if event == "alert":
             return data.get("unit_id") is None or data["unit_id"] in allowed
+        if event == "tx":
+            return data.get("unit_id") is None or data["unit_id"] in allowed
+        if event == "poll":
+            return data.get("unit") in allowed
         return True
     return ok
 
@@ -365,6 +371,8 @@ def make_handler(app):
                     else self._redirect("/account")
             if p in ("/reports", "/reports/"):
                 return self._static("reports.html") if self._need("reports") else None
+            if p in ("/channel", "/channel/"):
+                return self._static("channel.html") if self._need("reports") else None
             if p in ("/account", "/account/"):
                 return self._static("account.html")
             if p.startswith("/static/"):
@@ -387,6 +395,7 @@ def make_handler(app):
                     "speed_units": cfg["display"]["speed_units"],
                     "trail_min": cfg["display"]["trail_min"],
                     "reports": cfg["reports"],
+                    "polling_mode": cfg["polling"]["mode"],
                     "tiles": app.tiles.enabled(),
                     "attribution": app.tiles.attribution,
                     "max_zoom": app.tiles.max_zoom,
@@ -430,6 +439,16 @@ def make_handler(app):
                 return self._json(rows[:int(qs.get("limit", [100])[0])])
             if p == "/api/stream":
                 return self._stream()
+            if p == "/api/coverage":
+                t0, t1 = self._range(qs)
+                cell = max(50, min(int(qs.get("cell", [200])[0]), 2000))
+                src = set(qs.get("sources", [""])[0].split(",")) - {""} or None
+                return self._json(app.coverage.grid(t0, t1, cell, self._allowed_units(), src))
+            if p == "/api/poller":
+                st = app.poller.status()
+                if self.user["units"] is not None:
+                    st["missed_by_unit"] = {k: v for k, v in st["missed_by_unit"].items() if self._sees(k)}
+                return self._json(st)
             m = TILE_RE.match(p)
             if m:
                 cache = app.sat_tiles if m.group(1) else app.tiles
@@ -446,6 +465,37 @@ def make_handler(app):
                 if unit and not self._sees(unit):
                     return self._json({"error": "You don't have access to that unit"}, 403)
                 return self._json(reports.fleet_report(app.store, t0, t1, cfg, unit, self._allowed_units()))
+            if p == "/api/channel/stats":
+                if not self._need("reports"):
+                    return
+                t0, t1 = self._range(qs)
+                bucket = max(60, min(int(qs.get("bucket", [3600])[0]), 86400))
+                tz = int(qs.get("tz", [0])[0])
+                st = app.channel.stats(t0, t1, bucket, tz)
+                allowed = self._allowed_units()
+                if allowed is not None:
+                    st["per_unit"] = {k: v for k, v in st["per_unit"].items() if k in allowed}
+                st["coverage"] = {k: v for k, v in app.coverage.unit_summary(t0, t1).items() if self._sees(k)}
+                st["poller"] = {k: v for k, v in app.poller.status().items() if k in ("mode", "sent", "answered", "missed", "dry_run")}
+                return self._json(st)
+            if p == "/api/channel/log":
+                if not self._need("reports"):
+                    return
+                t0, t1 = self._range(qs)
+                return self._json(app.channel.log(t0, t1, qs.get("unit", [""])[0] or None, qs.get("kind", [""])[0] or None,
+                                                  min(int(qs.get("limit", [500])[0]), 5000), self._allowed_units()))
+            if p == "/api/channel/log.csv":
+                if not self._need("export"):
+                    return
+                t0, t1 = self._range(qs)
+                rows = app.channel.log(t0, t1, None, None, 100000, self._allowed_units())
+                out = io.StringIO(); w = csv.writer(out)
+                w.writerow(["start_local", "duration_s", "type", "unit", "display"])
+                for r in reversed(rows):
+                    w.writerow([time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(r["start"])), r["duration"],
+                                r["kind"], r["unit_id"] or "", r["display"] or ""])
+                return self._send(200, out.getvalue(), "text/csv",
+                                  {"Content-Disposition": f'attachment; filename="channel_log_{time.strftime("%Y%m%d", time.localtime(t0))}.csv"'})
             if p == "/api/report.csv":
                 return self._report_csv(qs) if self._need("export") else None
             if p == "/api/export.csv":
@@ -466,6 +516,20 @@ def make_handler(app):
                 return self._json({"users": [app.auth.public(x) for x in app.auth.users()],
                                    "roles": {k: v["label"] for k, v in ROLES.items()},
                                    "units": [{"id": x["id"], "alias": x["alias"]} for x in app.store.units()]})
+            if p == "/api/captures":
+                if not self._need("settings"):
+                    return
+                return self._json({"status": app.recorder.status(), "files": app.recorder.files()})
+            m = CAPTURE_RE.match(p)
+            if m:
+                if not self._need("settings"):
+                    return
+                path = app.recorder.path(m.group(1))
+                if not path:
+                    return self._send(404, "Not found", "text/plain")
+                with open(path, "rb") as f:
+                    return self._send(200, f.read(), "text/plain",
+                                      {"Content-Disposition": f'attachment; filename="{m.group(1)}"'})
             if p == "/api/audit":
                 if not self._need("users"):
                     return
@@ -556,6 +620,19 @@ def make_handler(app):
                 app.auth.audit(self.user, "raised a test emergency")
                 return self._json(app.alerts.raise_alert("test", f"TEST: emergency alarm test by {self._who()}"))
 
+            # ---- poll a unit now
+            m = POLL_RE.match(p)
+            if m:
+                if not self._need("poll"):
+                    return
+                if not self._sees(m.group(1)):
+                    return self._json({"error": "You don't have access to that unit"}, 403)
+                if app.cfg["polling"]["mode"] == "off":
+                    return self._json({"error": "Polling is switched off (Settings → Polling)"}, 409)
+                app.poller.request(m.group(1))
+                app.auth.audit(self.user, f"polled {m.group(1)}")
+                return self._json({"ok": True, "mode": app.cfg["polling"]["mode"]})
+
             # ---- zones
             if p == "/api/geofences" or FENCE_RE.match(p):
                 if not self._need("zones"):
@@ -590,6 +667,13 @@ def make_handler(app):
                 port = int(body.get("port", 0) or 0)
                 mine = port == app.cfg["web"]["port"]
                 return self._json({"port": port, "free": mine or port_free(host, port), "mine": mine})
+            if p == "/api/captures/start":
+                name = app.recorder.start(body.get("minutes", 10), self._who())
+                app.auth.audit(self.user, f"started a raw serial capture ({name})")
+                return self._json({"ok": True, "name": name, "status": app.recorder.status()})
+            if p == "/api/captures/stop":
+                app.recorder.stop()
+                return self._json({"ok": True, "status": app.recorder.status()})
             if p == "/api/tiles/clear":
                 app.tiles.clear()
                 app.auth.audit(self.user, "cleared the map tile cache")
@@ -618,6 +702,11 @@ def make_handler(app):
                 app.auth.audit(self.user, f"deleted zone {f['name'] if f else m.group(1)}")
                 app.broker.publish("geofences", app.store.geofences())
                 return self._json({"ok": True})
+            m = CAPTURE_RE.match(p)
+            if m:
+                if not self._need("settings"):
+                    return
+                return self._json({"ok": app.recorder.delete(m.group(1))})
             m = USER_RE.match(p)
             if m:
                 if not self._need("users"):
@@ -665,6 +754,7 @@ def make_handler(app):
                 "listening_ports": listening_ports(),
                 "serial_ports": serial_ports(cfg["serial"]["port"]),
                 "bauds": config_mod.BAUDS,
+                "poller": app.poller.status(),
             })
             try:
                 du = shutil.disk_usage(cfg["data_dir"])

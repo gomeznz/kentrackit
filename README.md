@@ -27,6 +27,17 @@ added once the poll command has been captured (see *Roadmap*).
   map, numbered stops (named by zone) and trips with distance and top speed. Print or CSV
 - **Dispatch screen:** trails (last N minutes), follow a unit, and a full-screen wall display
   (`/?wall=1` opens straight into it, handy for a kiosk screen)
+- **Channel activity** (`/channel`): every transmission logged (voice, data, polls) with
+  duration and unit; airtime charts, busy-hours heatmap, per-unit airtime, CSV. Live **on air**
+  indicator, and the talking unit pulses on the map. Stuck-carrier alert after 2 minutes
+- **Coverage map** (Coverage button on the map): built from the fleet's own traffic. Every report
+  is "heard here"; missed polls (and, before KenTrackIt polls, missed reports while moving) are
+  "not heard", spread along the route between where a unit went quiet and where it came back
+- **Smart polling** (Settings → Polling, off by default): moving units often, parked units
+  rarely, emergencies constantly, waits for a clear channel, Poll now from the map. Test mode
+  plans the schedule without transmitting. Needs the poll command captured from KAS-20
+- **Raw serial capture** (Settings → Diagnostics): record what the radio sends without stopping
+  the service, to decode voice-call IDs, status messages, emergencies or the KAS-20 poll
 - **Users and access control:** sign-in page, Administrator / Dispatcher / Viewer roles, optional
   per-user unit restrictions, audit log (see *Users* below)
 - Settings page for every option (`/settings`, or the ⚙ on the map)
@@ -109,6 +120,13 @@ unit, a status change and an emergency):
 PYTHONPATH=. python3 tools/simulate.py --hours 3 > demo.log
 python3 -m radio_avl --config test.json --replay demo.log
 ```
+
+## Testing polling without radios
+
+`tools/fake_radio.py` creates a virtual serial port with a pretend radio: three units driving
+around that answer polls, one that never answers, a coverage hole to the north, and the odd voice
+call. Point Settings → Radio connection at the port it prints, and set the poll command to
+`\x02POLL{num5}\x03`.
 
 ## Status and emergency messages: still to confirm
 

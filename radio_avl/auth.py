@@ -22,8 +22,8 @@ from . import config as config_mod
 
 ROLES = {
     "admin": {"label": "Administrator",
-              "perms": ["view", "reports", "export", "ack", "zones", "units", "settings", "users", "backup"]},
-    "dispatcher": {"label": "Dispatcher", "perms": ["view", "reports", "export", "ack", "zones", "units"]},
+              "perms": ["view", "reports", "export", "ack", "zones", "units", "poll", "settings", "users", "backup"]},
+    "dispatcher": {"label": "Dispatcher", "perms": ["view", "reports", "export", "ack", "zones", "units", "poll"]},
     "viewer": {"label": "Viewer", "perms": ["view", "reports"]},
 }
 

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/static/logo-mark.svg">
+<meta name="theme-color" content="#0b1b33">
+<title>Channel</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/settings.css">
+<link rel="stylesheet" href="/static/reports.css">
+<link rel="stylesheet" href="/static/channel.css">
+</head>
+<body class="settings channel">
+<div class="page wide">
+  <header class="top">
+    <a href="/" class="back">← Map</a>
+    <h1 class="title-row"><img src="/static/logo-mark.svg" alt="" class="logo">Channel activity</h1>
+    <span id="onair" class="onair" title="Is anyone transmitting right now?"><i></i><span>Channel clear</span></span>
+  </header>
+
+  <section class="card" id="controls">
+    <div class="row seg" id="presets">
+      <button data-h="1">Last hour</button>
+      <button data-h="today">Today</button>
+      <button data-h="24">24 hours</button>
+      <button data-h="168">7 days</button>
+      <button data-h="720">30 days</button>
+    </div>
+  </section>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="card viz-root">
+    <div class="chart-head">
+      <h2>Airtime</h2>
+      <div class="legend" id="legend"></div>
+    </div>
+    <p class="help" id="bars-help">Share of each period the channel was in use, by type of traffic.</p>
+    <div id="bars" class="chart"></div>
+  </section>
+
+  <section class="card viz-root">
+    <div class="chart-head"><h2>Busy hours</h2><div class="legend" id="heat-legend"></div></div>
+    <p class="help">Average share of each hour the channel was in use, by day of the week. Darker is busier.</p>
+    <div id="heat" class="chart heat"></div>
+  </section>
+
+  <section class="card">
+    <h2>By unit</h2>
+    <p class="help">Coverage counts every report heard against every poll it didn't answer (or report it
+      missed while moving, before KenTrackIt does the polling itself).</p>
+    <div class="table-wrap">
+      <table class="rep">
+        <thead><tr><th>Unit</th><th class="n">Transmissions</th><th class="n">Data</th><th class="n">Voice</th>
+          <th class="n">Polls</th><th class="n">Coverage</th></tr></thead>
+        <tbody id="unit-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="chart-head">
+      <h2>Transmission log</h2>
+      <div class="row">
+        <select id="log-kind"><option value="">All traffic</option><option value="voice">Voice</option>
+          <option value="data">Data</option><option value="poll">Polls</option></select>
+        <a id="log-csv" class="btn" href="#">CSV</a>
+      </div>
+    </div>
+    <div class="table-wrap log-wrap">
+      <table class="rep">
+        <thead><tr><th>Time</th><th class="n">Length</th><th>Type</th><th>Unit</th><th>Display</th></tr></thead>
+        <tbody id="log-rows"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+<div id="tip" class="tip" hidden></div>
+<script src="/static/common.js"></script>
+<script src="/static/channel.js"></script>
+</body>
+</html>

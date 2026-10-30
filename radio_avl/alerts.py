@@ -14,7 +14,7 @@ log = logging.getLogger("radio-avl")
 
 EXIT_BUFFER_M = 25          # GPS wanders ~30 m; must be this far outside to count as leaving
 SEVERITY = {"emergency": "critical", "test": "critical", "status": "warn", "overdue": "warn",
-            "speed": "warn", "enter": "info", "exit": "info"}
+            "speed": "warn", "enter": "info", "exit": "info", "channel": "warn", "poll": "warn"}
 
 
 class AlertEngine:
@@ -120,15 +120,22 @@ class AlertEngine:
         if text == last_text and t - last_t < 60:
             return
         self.last_display_alert = (text, t)
-        # Try to work out which unit it is from the text (e.g. "EMERGENCY U00113" or "113")
-        unit_id, lat, lon = None, None, None
-        tokens = {tok.strip(".,:;()").upper() for tok in text.split()}
+        u = self.find_unit_in_text(text)
+        self.raise_alert("emergency", f"Radio display: {text}", u and u["id"], t,
+                         u and u["last_lat"], u and u["last_lon"])
+
+    def find_unit_in_text(self, text):
+        """Which unit does some display text mention? e.g. "EMERGENCY U00113", "113" or "Truck 4"."""
+        if not text:
+            return None
+        up = text.upper()
+        tokens = {tok.strip(".,:;()[]").upper() for tok in text.split()}
         for u in self.app.store.units():
-            names = {u["id"].upper(), u["id"].lstrip("UuGg0"), (u["alias"] or "").upper()}
-            if tokens & {n for n in names if n}:
-                unit_id, lat, lon = u["id"], u["last_lat"], u["last_lon"]
-                break
-        self.raise_alert("emergency", f"Radio display: {text}", unit_id, t, lat, lon)
+            alias = (u["alias"] or "").upper()
+            names = {u["id"].upper(), u["id"].lstrip("UuGg0")}
+            if tokens & {n for n in names if n} or (alias and alias in up):
+                return u
+        return None
 
     def check_overdue(self):
         mins = self.app.cfg["alerts"]["overdue_min"]

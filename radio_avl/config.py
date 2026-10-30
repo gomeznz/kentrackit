@@ -40,6 +40,9 @@ DEFAULTS = {
     "alerts": {"overdue_min": 10, "speed_limit_kmh": 0, "status_watch": True,
                "emergency_keywords": "emergency, emerg, man down"},
     "reports": {"stop_min": 5, "stop_radius_m": 60},
+    "polling": {"mode": "off", "command": "", "format": "ascii", "units": "",
+                "moving_s": 20, "parked_s": 120, "emergency_s": 10,
+                "timeout_s": 8, "guard_s": 1.0, "max_per_min": 20},
     "tiles": {"source": "osm", "linz_key": "", "custom_url": "", "custom_attribution": "",
               "satellite": "esri", "sat_custom_url": "", "sat_custom_attribution": "",
               "max_zoom": 18},
@@ -308,6 +311,40 @@ def apply_patch(cfg, patch):
             new["reports"]["stop_min"] = _num(r["stop_min"], 1, 240, "Stop length", True)
         if "stop_radius_m" in r:
             new["reports"]["stop_radius_m"] = _num(r["stop_radius_m"], 15, 1000, "Stop radius", True)
+
+    pl = patch.get("polling")
+    if pl is not None:
+        P = new["polling"]
+        if "mode" in pl:
+            if pl["mode"] not in ("off", "dry_run", "live"):
+                raise Invalid("Polling mode must be off, dry_run or live")
+            P["mode"] = pl["mode"]
+        if "format" in pl:
+            if pl["format"] not in ("ascii", "hex"):
+                raise Invalid("Command format must be ascii or hex")
+            P["format"] = pl["format"]
+        if "command" in pl:
+            P["command"] = str(pl["command"])[:300]
+        if "units" in pl:
+            ids = [x.strip() for x in str(pl["units"]).split(",") if x.strip()]
+            if any(not re.fullmatch(r"[A-Za-z0-9_.-]{1,32}", x) for x in ids):
+                raise Invalid("Units to poll: comma-separated unit IDs, e.g. U00112, U00113")
+            P["units"] = ", ".join(ids)
+        for k, lo, hi, name in (("moving_s", 5, 3600, "Moving interval"), ("parked_s", 10, 86400, "Parked interval"),
+                                ("emergency_s", 3, 600, "Emergency interval"), ("timeout_s", 2, 60, "Reply timeout"),
+                                ("max_per_min", 1, 60, "Max polls per minute")):
+            if k in pl:
+                P[k] = _num(pl[k], lo, hi, name, True)
+        if "guard_s" in pl:
+            P["guard_s"] = round(_num(pl["guard_s"], 0, 10, "Clear-channel wait"), 1)
+        if P["mode"] == "live":
+            if not P["command"].strip():
+                raise Invalid("Enter the poll command before switching polling to live")
+            from .poller import build_command
+            try:
+                build_command(P, "U00112", 1)
+            except Exception as e:
+                raise Invalid(f"The poll command can't be built: {e}")
 
     if "keep_days" in patch:
         new["keep_days"] = _num(patch["keep_days"], 0, 3650, "Keep history", True)

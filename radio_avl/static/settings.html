@@ -228,6 +228,68 @@
     <div class="actions"><a class="btn" href="/reports">Open reports</a><button type="submit">Save</button></div>
   </form>
 
+  <!-- Polling -->
+  <form class="card" data-section="polling">
+    <h2>Polling</h2>
+    <p class="help">KenTrackIt can ask units for their positions itself, instead of KAS-20: moving units often,
+      parked units rarely, units in an emergency constantly, and always waiting for a clear channel.
+      Missed polls go onto the coverage map.</p>
+    <label>Mode
+      <select id="pl-mode">
+        <option value="off">Off: listen only (KAS-20 still polling)</option>
+        <option value="dry_run">Test: work out the schedule and log it, send nothing</option>
+        <option value="live">Live: KenTrackIt polls the units</option>
+      </select>
+    </label>
+    <div id="pl-live-warn" class="banner" hidden>Live polling transmits on the customer's channel. Switch KAS-20
+      off first, so units aren't polled by both.</div>
+    <div class="two">
+      <label>Poll command
+        <input id="pl-cmd" placeholder="captured from KAS-20, e.g. \x02...{num5}...\x03" autocomplete="off" spellcheck="false">
+        <span class="hint">Placeholders: {id} U00112 · {num} 112 · {num5} 00112 · {seq} 2-digit counter. Escapes: \x02 \x03 \r \n</span>
+      </label>
+      <label>Written as
+        <select id="pl-fmt"><option value="ascii">Text with escapes</option><option value="hex">Hex bytes</option></select>
+        <span class="hint" id="pl-preview"></span>
+      </label>
+    </div>
+    <label>Only poll these units <input id="pl-units" placeholder="leave blank for every unit that has reported, e.g. U00112, U00113"></label>
+    <div class="two">
+      <label>Moving units every <span class="unit-input"><input id="pl-moving" type="number" min="5" max="3600" required>seconds</span></label>
+      <label>Parked units every <span class="unit-input"><input id="pl-parked" type="number" min="10" max="86400" required>seconds</span></label>
+    </div>
+    <div class="two">
+      <label>Units in an emergency every <span class="unit-input"><input id="pl-emerg" type="number" min="3" max="600" required>seconds</span></label>
+      <label>Wait for a reply <span class="unit-input"><input id="pl-timeout" type="number" min="2" max="60" required>seconds</span></label>
+    </div>
+    <div class="two">
+      <label>Channel must be clear for <span class="unit-input"><input id="pl-guard" type="number" min="0" max="10" step="0.1" required>seconds</span></label>
+      <label>At most <span class="unit-input"><input id="pl-max" type="number" min="1" max="60" required>polls a minute</span></label>
+    </div>
+    <div class="status-grid">
+      <div><span class="k">Sent / answered</span><span id="pl-st-sent">–</span></div>
+      <div><span class="k">Missed</span><span id="pl-st-missed">–</span></div>
+      <div><span class="k">Planned in test mode</span><span id="pl-st-dry">–</span></div>
+      <div><span class="k">Last poll</span><span id="pl-st-last">–</span></div>
+    </div>
+    <div class="actions"><a class="btn" href="/channel">Channel activity</a><button type="submit">Save</button></div>
+  </form>
+
+  <!-- Diagnostics -->
+  <section class="card">
+    <h2>Diagnostics: raw serial capture</h2>
+    <p class="help">Records exactly what the radio sends (and what KenTrackIt sends to it) while the service keeps
+      running. Use it to capture a voice call, a status message, an emergency or a KAS-20 poll so they can be
+      decoded. Files replay with <code>--replay</code>.</p>
+    <div class="row">
+      <select id="cap-min"><option value="2">2 minutes</option><option value="10" selected>10 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option></select>
+      <button type="button" id="cap-start">Start capture</button>
+      <button type="button" id="cap-stop" hidden>Stop</button>
+      <span id="cap-status" class="hint"></span>
+    </div>
+    <table class="units"><tbody id="cap-files"></tbody></table>
+  </section>
+
   <!-- Units -->
   <section class="card">
     <h2>Units</h2>

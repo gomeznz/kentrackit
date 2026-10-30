@@ -18,13 +18,17 @@ from . import config as config_mod
 from . import kenwood
 from .alerts import AlertEngine
 from .auth import Auth
+from .channel import Channel
+from .coverage import Coverage
+from .poller import Poller
+from .recorder import Recorder
 from .store import Store
 from .web import Broker, TileCache, serve, rebind
 
 log = logging.getLogger("radio-avl")
 
 class App:
-    VERSION = "0.4"
+    VERSION = "0.5"
 
     def __init__(self, cfg, config_path=None, mode="serial"):
         self.cfg = cfg
@@ -35,6 +39,12 @@ class App:
         self.broker = Broker()
         self.alerts = AlertEngine(self)
         self.auth = Auth(self)
+        self.channel = Channel(self)
+        self.coverage = Coverage(self)
+        self.poller = Poller(self)
+        self.recorder = Recorder(self)
+        self.ser = None
+        self.ser_lock = threading.Lock()
         self.tiles = TileCache(cfg, cfg["data_dir"])
         self.sat_tiles = TileCache(cfg, cfg["data_dir"], "sat")
         self.servers = []
@@ -107,6 +117,11 @@ class App:
             unit = self.store.add_position(d, rx_time)
             self.stats["positions"] += 1
             zones = self.alerts.on_position(d, unit, rx_time)
+            self.channel.on_position(d["unit"], rx_time)
+            self.poller.on_position(d["unit"], rx_time)
+            if d["valid"]:
+                self.coverage.on_report(d["unit"], d["lat"], d["lon"], rx_time,
+                                        polling_active=self.cfg["polling"]["mode"] == "live")
             self.broker.publish("position", {
                 "unit": unit, "rx_time": rx_time, "valid": d["valid"], "zones": zones["fences"],
                 "lat": d["lat"], "lon": d["lon"],
@@ -115,12 +130,17 @@ class App:
                      d["lat"] or 0, d["lon"] or 0)
         elif kind == "busy":
             self.broker.publish("channel", {"busy": d["busy"], "t": rx_time}, sticky=True)
+            self.channel.on_busy(d["busy"], rx_time)
         elif kind == "display":
             self.broker.publish("display", {"fields": d["fields"], "message": d["message"],
                                             "t": rx_time}, sticky=True)
-            if d["message"] and d["message"] not in ("Receive Data", "Complete"):
+            # keep unusual pop-ups (status, emergency...) in the event log; a unit ID shown during a
+            # voice call is already in the channel log
+            if d["message"] and d["message"] not in ("Receive Data", "Complete") \
+                    and not (self.channel.busy and self.alerts.find_unit_in_text(d["message"])):
                 self.store.add_event("display", d["message"], None, rx_time)
             self.alerts.on_display(d, rx_time)
+            self.channel.on_display(d["fields"], d["message"], rx_time)
         elif kind == "status":
             self.broker.publish("status", {"flags": d["flags"]}, sticky=True)
         elif kind in ("sentence", "unknown"):
@@ -170,14 +190,18 @@ class App:
                     self.link(True, f"{port} @ {baud}")
                     self.store.add_event("link", f"serial open {port} @ {baud}")
                     reader, self.last_seq = kenwood.FrameReader(), None
+                    self.ser = ser
                     while not self.stop.is_set() and not self.reconnect.is_set():
                         data = ser.read(512)
                         if data:
                             now = self.now()
+                            self.recorder.rx(data, now)
                             for fr in reader.feed(data):
                                 self.handle(fr, now)
+                self.ser = None
                 self.link(False, "reconnecting")
             except Exception as e:  # unplugged, permission, port busy, etc.
+                self.ser = None
                 log.warning("serial %s: %s", port, e)
                 self.link(False, str(e))
                 self.store.add_event("link", f"serial error: {e}")
@@ -185,6 +209,21 @@ class App:
                     if self.stop.is_set() or self.reconnect.is_set():
                         break
                     time.sleep(0.1)
+
+    def serial_write(self, data):
+        """Send bytes to the radio (used by the poller). Returns False if the radio isn't connected."""
+        with self.ser_lock:
+            ser = self.ser
+            if not ser:
+                return False
+            try:
+                ser.write(data)
+                ser.flush()
+            except Exception as e:
+                self.store.add_event("link", f"serial write failed: {e}")
+                return False
+        self.recorder.tx(data, self.now())
+        return True
 
     def run_replay(self, path, speed):
         """Feed a raw_*.log written by nxdn_listen.py."""
@@ -208,11 +247,16 @@ class App:
 
     def housekeeping(self):
         last_prune = 0
-        while not self.stop.wait(30):
+        while not self.stop.wait(10):
             try:
                 self.alerts.check_overdue()
+                self.channel.tick(self.now())
                 if time.time() - last_prune > 3600:
                     self.store.prune(self.cfg["keep_days"])
+                    if self.cfg["keep_days"]:
+                        cutoff = time.time() - self.cfg["keep_days"] * 86400
+                        self.channel.prune(cutoff)
+                        self.coverage.prune(cutoff)
                     last_prune = time.time()
             except Exception as e:
                 log.warning("housekeeping: %s", e)
@@ -239,6 +283,7 @@ def main(argv=None):
         return 2
     log.info("web on http://%s:%d", cfg["web"]["host"], cfg["web"]["port"])
     threading.Thread(target=app.housekeeping, daemon=True).start()
+    threading.Thread(target=app.poller.run, daemon=True, name="poller").start()
 
     signal.signal(signal.SIGTERM, lambda *_: app.stop.set())
     try:
