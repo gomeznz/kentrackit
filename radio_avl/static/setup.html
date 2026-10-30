@@ -31,7 +31,7 @@
 <script src="/static/wallpaper.js"></script>
 <script>
 "use strict";
-KTWallpaper(document.getElementById("wall"));
+KTWallpaper(document.getElementById("wall")).morseKey(document.querySelector(".brand-mark"));
 (() => {
   const $ = (id) => document.getElementById(id);
   $("f").onsubmit = async (ev) => {

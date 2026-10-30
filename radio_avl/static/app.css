@@ -207,8 +207,14 @@ body.wall .leaflet-top { top: 50px; }
 .basemap-switch button + button { border-left: 1px solid #ccc; }
 .basemap-switch button.on { background: #1d2330; color: #fff; }
 .on-sat .zone-label { color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 2px #000; }
-.tool.me { margin-left: auto; }
-.tool.me span { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+header { gap: 10px; }
+header .title-row { flex: none; }
+.me-chip { display: inline-flex; align-items: center; justify-content: center; flex: none; margin-right: auto;
+           width: 28px; height: 28px; border-radius: 50%; text-decoration: none;
+           background: linear-gradient(135deg, #0f4c5c, #0b1b33); color: #5eead4; font: 700 11px/1 var(--font); letter-spacing: .02em;
+           box-shadow: 0 0 0 1px color-mix(in srgb, #5eead4 35%, transparent); }
+.me-chip:hover { box-shadow: 0 0 0 2px var(--accent); color: #fff; }
+.leds { flex: none; }
 #emergency #em-silence { background: rgba(255,255,255,.2); color: #fff; }
 .title-row { display: flex; align-items: center; gap: 9px; }
 .title-row .logo { width: 26px; height: 26px; border-radius: 7px; flex: none; }

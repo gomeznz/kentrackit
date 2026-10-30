@@ -29,3 +29,5 @@ body.auth { display: flex; align-items: center; justify-content: center; min-hei
 .small { font-size: 12px; color: rgba(214, 232, 240, 0.55); margin: 16px 0 0; text-align: center; }
 .auth-card > .small.intro { margin: -8px 0 16px; }
 @media (max-width: 420px) { .auth-card { padding: 24px 18px 18px; } }
+.brand-mark { transition: transform .06s, box-shadow .06s; -webkit-user-drag: none; }
+.brand-mark.keyed { transform: translateY(2px) scale(.97); box-shadow: 0 4px 14px rgba(251, 191, 36, 0.55), 0 0 0 2px rgba(251, 191, 36, 0.5); }

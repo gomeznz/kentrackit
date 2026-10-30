@@ -14,7 +14,9 @@
   const now = () => (Date.now() + skew) / 1000;
   document.title = cfg.title; $("title").textContent = cfg.title; $("w-title").textContent = cfg.title;
   const me = cfg.user, can = (p) => me.perms.includes(p);
-  $("me-name").textContent = me.display_name || me.username;
+  const fullName = me.display_name || me.username;
+  $("me-name").textContent = fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  $("t-me").title = `${fullName} (${me.role_label}): my account and sign out`;
   $("t-settings").hidden = !can("settings");
   $("t-reports").hidden = !can("reports");
   $("d-edit").hidden = !can("units");
