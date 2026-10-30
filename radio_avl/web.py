@@ -306,7 +306,13 @@ def make_handler(app):
             origin = self.headers.get("Origin")
             if not origin or origin == "null":
                 return origin is None
-            return urlparse(origin).netloc == self.headers.get("Host", "")
+            # Behind a reverse proxy or Cloudflare Tunnel the Host header may be the local address
+            # (e.g. localhost:8090) while the browser is on the public hostname, so also accept
+            # the host the proxy says it forwarded. Session cookies are SameSite=Strict as well.
+            o = urlparse(origin).netloc.lower()
+            hosts = {self.headers.get("Host", "").lower()}
+            hosts.update(h.strip().lower() for h in self.headers.get("X-Forwarded-Host", "").split(",") if h.strip())
+            return o in hosts or o.split(":")[0] in {h.split(":")[0] for h in hosts if h}
 
         def _cookie(self, token, max_age=None):
             parts = [f"{COOKIE}={token}", "Path=/", "HttpOnly", "SameSite=Strict"]
