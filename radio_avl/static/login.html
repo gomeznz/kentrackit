@@ -3,15 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/static/logo-mark.svg">
+<meta name="theme-color" content="#0b1b33">
 <title>Sign in</title>
 <link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/auth.css">
 </head>
 <body class="auth">
+<canvas id="wall" aria-hidden="true"></canvas>
 <main class="auth-card">
   <div class="brand">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/></svg>
-    <h1 id="a-title">KenTrackIt</h1>
+    <img src="/static/logo-mark.svg" alt="" class="brand-mark">
+    <div class="wordmark">KenTrack<i>It</i></div>
+    <div class="tagline" id="a-title">Radio fleet tracking</div>
   </div>
   <form id="f">
     <label>Username <input id="u" autocomplete="username" required autofocus></label>
@@ -22,14 +26,17 @@
   </form>
   <p class="small">Use "keep me signed in" on dispatch and wall-display screens only.</p>
 </main>
+<script src="/static/wallpaper.js"></script>
 <script>
 "use strict";
+KTWallpaper(document.getElementById("wall"));
 (async () => {
   const $ = (id) => document.getElementById(id);
   try {
     const s = await (await fetch("/api/auth-status")).json();
     if (s.setup) location.href = "/setup";
-    $("a-title").textContent = s.title; document.title = "Sign in · " + s.title;
+    if (s.title && s.title !== "KenTrackIt") $("a-title").textContent = s.title;
+    document.title = "Sign in · " + (s.title || "KenTrackIt");
   } catch (e) { /* offline */ }
   $("f").onsubmit = async (ev) => {
     ev.preventDefault();

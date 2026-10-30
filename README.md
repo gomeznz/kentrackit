@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.svg" alt="KenTrackIt" width="320"></p>
+
 # KenTrackIt
 
 A Raspberry Pi replacement for Kenwood KAS-20. It reads GPS reports from a Kenwood NX-series

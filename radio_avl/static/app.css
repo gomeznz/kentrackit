@@ -210,3 +210,7 @@ body.wall .leaflet-top { top: 50px; }
 .tool.me { margin-left: auto; }
 .tool.me span { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #emergency #em-silence { background: rgba(255,255,255,.2); color: #fff; }
+.title-row { display: flex; align-items: center; gap: 9px; }
+.title-row .logo { width: 26px; height: 26px; border-radius: 7px; flex: none; }
+.top .title-row .logo { width: 28px; height: 28px; }
+#wallbar .logo { width: 30px; height: 30px; border-radius: 8px; margin-right: -12px; }

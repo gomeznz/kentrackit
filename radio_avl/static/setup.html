@@ -3,17 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/static/logo-mark.svg">
+<meta name="theme-color" content="#0b1b33">
 <title>First-time setup</title>
 <link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/auth.css">
 </head>
 <body class="auth">
+<canvas id="wall" aria-hidden="true"></canvas>
 <main class="auth-card">
   <div class="brand">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/></svg>
-    <h1>Welcome to KenTrackIt</h1>
+    <img src="/static/logo-mark.svg" alt="" class="brand-mark">
+    <div class="wordmark">KenTrack<i>It</i></div>
+    <div class="tagline">Welcome! Let's get you set up.</div>
   </div>
-  <p class="small">Create the administrator account. You can add dispatchers and viewers afterwards
+  <p class="small intro">Create the administrator account. You can add dispatchers and viewers afterwards
     under Settings → Users.</p>
   <form id="f">
     <label>Your name <input id="n" autocomplete="name" placeholder="e.g. Alex Gordon"></label>
@@ -24,8 +28,10 @@
     <button type="submit" class="primary">Create account</button>
   </form>
 </main>
+<script src="/static/wallpaper.js"></script>
 <script>
 "use strict";
+KTWallpaper(document.getElementById("wall"));
 (() => {
   const $ = (id) => document.getElementById(id);
   $("f").onsubmit = async (ev) => {

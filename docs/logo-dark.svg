@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64">
+  <title>KenTrackIt</title>
+  <svg width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="kt-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1b33"/>
+      <stop offset="1" stop-color="#0f4c5c"/>
+    </linearGradient>
+    <linearGradient id="kt-pin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cfeff4"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#kt-bg)"/>
+  <g fill="none" stroke="#5eead4" stroke-opacity=".13" stroke-width="1">
+    <path d="M-2 45c12-6 20 2 32-3s18-14 36-10"/>
+    <path d="M-2 53c14-5 22 3 34-2s20-12 34-8"/>
+    <path d="M-2 37c10-6 18-1 26-6"/>
+  </g>
+  <path d="M8 56c5-1 7-8 12-9s7 2 10 0" fill="none" stroke="#5eead4" stroke-width="2.6"
+        stroke-linecap="round" stroke-dasharray="0.1 4.6"/>
+  <circle cx="8" cy="56" r="2.4" fill="#5eead4"/>
+  <g fill="none" stroke="#fbbf24" stroke-width="3" stroke-linecap="round">
+    <path d="M38.5 13.3A17 17 0 0 1 46.4 23.6"/>
+    <path d="M42 7.2A24 24 0 0 1 53.2 21.8" stroke-opacity=".55"/>
+  </g>
+  <path d="M30 50c-1.2 0-12.5-11.5-12.5-22a12.5 12.5 0 0 1 25 0C42.5 38.5 31.2 50 30 50z" fill="url(#kt-pin)"/>
+  <circle cx="30" cy="28" r="5.2" fill="#fbbf24"/>
+  <circle cx="30" cy="28" r="2.1" fill="#0b1b33"/>
+</svg>
+  <text x="78" y="43" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="34" font-weight="750" letter-spacing="-0.6" fill="#ffffff">KenTrack<tspan fill="#5eead4">It</tspan></text>
+</svg>

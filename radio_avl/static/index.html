@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/static/logo-mark.svg">
+<meta name="theme-color" content="#0b1b33">
 <title>KenTrackIt</title>
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
 <link rel="stylesheet" href="/static/app.css">
@@ -10,7 +12,7 @@
 <body>
 <aside id="side">
   <header>
-    <h1 id="title">KenTrackIt</h1>
+    <h1 class="title-row"><img src="/static/logo-mark.svg" alt="" class="logo"><span id="title">KenTrackIt</span></h1>
     <div class="leds">
       <span class="led" id="led-link" title="Radio serial link"><i></i>Link</span>
       <span class="led" id="led-chan" title="Channel activity"><i></i>Channel</span>
@@ -140,7 +142,7 @@
 <main id="map-wrap">
   <div id="map"></div>
   <div id="wallbar" hidden>
-    <span id="w-title"></span>
+    <img src="/static/logo-mark.svg" alt="" class="logo"><span id="w-title"></span>
     <span id="w-stats"></span>
     <span id="w-clock"></span>
     <button id="w-exit" title="Leave wall display">✕</button>
