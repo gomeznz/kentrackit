@@ -137,7 +137,7 @@
   async function loadLcd() {
     try { LCDI = await api("/api/lcd"); } catch (e) { return; }
     const st = LCDI.status, C = S.lcd;
-    $("lcd-st").textContent = { off: "Off (preview only)", running: `Running on i2c-${C.bus} at 0x${C.address.toString(16).toUpperCase()}`,
+    $("lcd-st").textContent = { off: "Off (preview only)", running: `Running on i2c-${C.bus} at 0x${(st.address ?? C.address).toString(16).toUpperCase()}` + (st.address != null && st.address !== C.address ? " (found it there: save that address to make it stick)" : ""),
       error: "Problem: " + st.error }[st.state] || st.state;
     $("lcd-st").className = st.state === "error" ? "bad-text" : st.state === "running" ? "ok-text" : "";
     const pv = $("lcd-preview"); pv.replaceChildren();

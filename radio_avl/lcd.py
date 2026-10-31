@@ -179,9 +179,10 @@ class FrontPanel:
         self.state, self.error, self.lines = "off", "", []
         self.lcd = None
         self.active_until = 0.0
+        self.address = None
 
     def info(self):
-        return {"state": self.state, "error": self.error, "lines": self.lines}
+        return {"state": self.state, "error": self.error, "lines": self.lines, "address": self.address}
 
     # ---- what to show ---------------------------------------------------------
     def _name(self, unit_id, fallback=""):
@@ -244,9 +245,19 @@ class FrontPanel:
                 self._preview_loop()
                 continue
             try:
-                self.lcd = LCD(C["bus"], C["address"], C["cols"], C["rows"])
+                self.address = C["address"]
+                try:
+                    self.lcd = LCD(C["bus"], self.address, C["cols"], C["rows"])
+                except OSError as e:
+                    # nothing at the saved address: if exactly one LCD backpack is on the bus, use that
+                    found, _ = scan(C["bus"]) if e.errno in (5, 6, 121) else ([], None)
+                    if len(found) != 1:
+                        raise
+                    self.address = found[0]
+                    self.lcd = LCD(C["bus"], self.address, C["cols"], C["rows"])
+                    log.warning("LCD: nothing at 0x%02X, found one at 0x%02X instead", C["address"], self.address)
                 self.state, self.error = "running", ""
-                log.info("LCD on i2c-%s at 0x%02X", C["bus"], C["address"])
+                log.info("LCD on i2c-%s at 0x%02X", C["bus"], self.address)
             except OSError as e:
                 self.state = "error"
                 if e.errno in (5, 6, 121):
