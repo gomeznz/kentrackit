@@ -17,7 +17,7 @@ from http.cookies import SimpleCookie
 from urllib.parse import urlparse, parse_qs, quote
 
 from . import config as config_mod
-from . import geo, reports, voice as voice_mod
+from . import geo, reports, voice as voice_mod, lcd as lcd_mod
 from .auth import AuthError, ROLES, REMEMBER_S
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -507,6 +507,17 @@ def make_handler(app):
                 name = f"{tx['unit_id'] or 'call'}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(tx['start']))}{os.path.splitext(path)[1]}"
                 return self._file(path, "audio/ogg" if path.endswith(".opus") else "audio/wav",
                                   qs.get("download", ["0"])[0] == "1" and name)
+            if p == "/api/lcd":
+                if not self._need("settings"):
+                    return
+                out = {"status": app.panel.info(), "buses": lcd_mod.buses()}
+                if qs.get("scan"):
+                    bus = int(qs.get("bus", [cfg["lcd"]["bus"]])[0])
+                    found, err = lcd_mod.scan(bus)
+                    if app.panel.lcd is not None and bus == cfg["lcd"]["bus"] and cfg["lcd"]["address"] not in found:
+                        found.append(cfg["lcd"]["address"])     # in use by us right now
+                    out["scan"] = {"bus": bus, "found": [f"0x{a:02X}" for a in sorted(found)], "error": err}
+                return self._json(out)
             if p == "/api/voice":
                 if not self._need("settings"):
                     return

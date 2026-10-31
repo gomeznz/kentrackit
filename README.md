@@ -138,6 +138,29 @@ recording and use the level meter (aim for peaks around −12 dB; set gain with 
 
 Make sure the customer has agreed to voice logging and their staff know calls are recorded.
 
+## Front-panel LCD (optional)
+
+A 20×4 character LCD with a PCF8574 I2C backpack (the common blue one, about $15) shows the station's status
+without a screen or browser:
+
+```
+KenTrackIt     13:42      title and clock
+ΨON AIR MORRIS   12s      who's talking right now (or "Channel clear" / "NO RADIO LINK")
+Last MORRIS       3m      the last voice caller
+Units 8/10  Alerts 0      rotates: units heard, calls today, the web address
+```
+
+An emergency takes over the screen and flashes the backlight until it's acknowledged on the map.
+
+1. Wire it to the Pi header: GND → pin 6, VCC → pin 2 (5 V), SDA → pin 3, SCL → pin 5. The I2C bus is shared,
+   so it's fine alongside other I2C devices.
+2. `sudo raspi-config` → Interface Options → I2C → Yes, then `sudo ./install.sh` again (adds the service to
+   the `i2c` group) and `sudo systemctl restart radio-avl`.
+3. Settings → Front-panel display → **Find it**, tick **Use a front-panel display**, Save.
+
+If the text is blank or solid blocks, turn the small contrast pot on the back of the backpack.
+No extra Python packages are needed.
+
 ## Testing polling without radios
 
 `tools/fake_radio.py` creates a virtual serial port with a pretend radio: three units driving

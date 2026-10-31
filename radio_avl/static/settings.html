@@ -277,6 +277,39 @@
     <div class="actions"><a class="btn" href="/channel">Listen on the Channel page</a><button type="submit">Save</button></div>
   </form>
 
+  <!-- Front-panel LCD -->
+  <form class="card" data-section="lcd" id="lcd-card">
+    <h2>Front-panel display</h2>
+    <p class="help">Shows who's on air, the last caller, units heard and alerts on a 20×4 character LCD with an
+      I2C backpack (the common PCF8574 board). Wire it to the Pi: <b>GND</b> → pin 6, <b>VCC</b> → pin 2 (5 V),
+      <b>SDA</b> → pin 3, <b>SCL</b> → pin 5. Turn I2C on first with <code>sudo raspi-config</code>
+      (Interface Options → I2C). An emergency takes over the screen and flashes the backlight.</p>
+    <div class="lcd-preview" id="lcd-preview" aria-label="Display preview"></div>
+    <label class="check"><input type="checkbox" id="lcd-on"> Use a front-panel display</label>
+    <div class="two">
+      <label>I2C bus <select id="lcd-bus"></select></label>
+      <label>Address
+        <span class="row"><input id="lcd-addr" placeholder="0x27" pattern="0[xX][0-9a-fA-F]{1,2}" required>
+        <button type="button" id="lcd-scan">Find it</button></span>
+        <span class="hint" id="lcd-scan-res">Usually 0x27, or 0x3F.</span>
+      </label>
+    </div>
+    <div class="two">
+      <label>Size <select id="lcd-size"><option value="20x4">20 × 4</option><option value="16x2">16 × 2</option>
+        <option value="20x2">20 × 2</option><option value="16x4">16 × 4</option></select></label>
+      <label>Backlight <select id="lcd-bl"><option value="auto">On for 30 s after activity</option>
+        <option value="on">Always on</option><option value="off">Off (still lights for emergencies)</option></select></label>
+    </div>
+    <div class="two">
+      <label>Bottom line changes every <span class="unit-input"><input id="lcd-rot" type="number" min="2" max="60" required>seconds</span></label>
+      <label class="check"><input type="checkbox" id="lcd-flash"> Flash the backlight in an emergency</label>
+    </div>
+    <div class="status-grid">
+      <div><span class="k">Display</span><span id="lcd-st">–</span></div>
+    </div>
+    <div class="actions"><button type="submit">Save</button></div>
+  </form>
+
   <!-- Polling -->
   <form class="card" data-section="polling">
     <h2>Polling</h2>

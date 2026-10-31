@@ -51,6 +51,7 @@ class Channel:
         self.carrier = False        # S1 .. S0
         self.voice_on = False       # T1 .. T0
         self.radio_names = {}       # unit ID -> name programmed in that radio (from caller ID)
+        self.last_voice = None      # {"unit", "name", "end"} of the last voice call, for the front panel
 
     @property
     def busy(self):
@@ -159,6 +160,8 @@ class Channel:
             texts.insert(0, cur["name"])
         detail = {"caller_id": True, "to": cur["to"]} if cur.get("to") else ({"caller_id": True} if cur["caller"] else None)
         tx = self.record(start, t, kind, cur["unit"], " / ".join(texts)[:300], detail)
+        if kind == "voice":
+            self.last_voice = {"unit": cur["unit"], "name": cur["name"], "end": t}
         self.app.voice.busy_end(tx)
 
     def record(self, start, end, kind, unit_id=None, display="", detail=None):
@@ -172,6 +175,16 @@ class Channel:
         return tx
 
     # ---- queries -----------------------------------------------------------------
+    def count(self, t0, t1, kind):
+        with self.lock:
+            return self.db.execute("SELECT COUNT(*) FROM transmissions WHERE start >= ? AND start <= ? AND kind = ?",
+                                   (t0, t1, kind)).fetchone()[0]
+
+    def load_last_voice(self):
+        with self.lock:
+            r = self.db.execute("SELECT unit_id, end FROM transmissions WHERE kind='voice' ORDER BY start DESC LIMIT 1").fetchone()
+        if r:
+            self.last_voice = {"unit": r[0], "name": "", "end": r[1]}
     def attach_audio(self, tx_id, rel_path, seconds):
         with self.lock, self.db:
             self.db.execute("UPDATE transmissions SET audio=?, audio_s=? WHERE id=?", (rel_path, seconds, tx_id))

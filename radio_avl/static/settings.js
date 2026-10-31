@@ -131,6 +131,45 @@
     if (es[0].isIntersecting) voiceTimer = setInterval(loadVoice, 500);
   }).observe($("voice-card"));
 
+  // ---- front-panel LCD -----------------------------------------------------------
+  let LCDI = null;
+  const lcdChars = (t) => t.replace(/\x00/g, "Ψ").replace(/\x01/g, "♦");
+  async function loadLcd() {
+    try { LCDI = await api("/api/lcd"); } catch (e) { return; }
+    const st = LCDI.status, C = S.lcd;
+    $("lcd-st").textContent = { off: "Off (preview only)", running: `Running on i2c-${C.bus} at 0x${C.address.toString(16).toUpperCase()}`,
+      error: "Problem: " + st.error }[st.state] || st.state;
+    $("lcd-st").className = st.state === "error" ? "bad-text" : st.state === "running" ? "ok-text" : "";
+    const pv = $("lcd-preview"); pv.replaceChildren();
+    for (let r = 0; r < C.rows; r++) { const d = document.createElement("div"); d.textContent = lcdChars((st.lines[r] || "").padEnd(C.cols).slice(0, C.cols)); pv.appendChild(d); }
+    pv.classList.toggle("dark", st.state === "error");
+  }
+  function fillLcd() {
+    const C = S.lcd;
+    $("lcd-on").checked = C.enabled; $("lcd-addr").value = "0x" + C.address.toString(16).toUpperCase();
+    $("lcd-size").value = `${C.cols}x${C.rows}`; $("lcd-bl").value = C.backlight; $("lcd-rot").value = C.rotate_s;
+    $("lcd-flash").checked = C.flash_emergency;
+    const sel = $("lcd-bus"); sel.replaceChildren();
+    const buses = new Set([...((LCDI && LCDI.buses) || []), C.bus]);
+    for (const b of [...buses].sort((a, b) => a - b)) { const o = document.createElement("option"); o.value = b; o.textContent = `i2c-${b}` + (b === 1 ? " (header pins 3 and 5)" : ""); sel.appendChild(o); }
+    sel.value = C.bus;
+  }
+  $("lcd-scan").onclick = async () => {
+    $("lcd-scan-res").textContent = "Looking…";
+    try {
+      const r = (await api(`/api/lcd?scan=1&bus=${$("lcd-bus").value}`)).scan;
+      if (r.error) { $("lcd-scan-res").textContent = r.error; return; }
+      if (!r.found.length) { $("lcd-scan-res").textContent = "Nothing found. Check the wiring and that I2C is on."; return; }
+      $("lcd-addr").value = r.found[0];
+      $("lcd-scan-res").textContent = r.found.length > 1 ? `Found ${r.found.join(", ")}. Using ${r.found[0]}.` : `Found it at ${r.found[0]}. Tick the box above and save.`;
+    } catch (e) { $("lcd-scan-res").textContent = e.message; }
+  };
+  let lcdTimer = null;
+  new IntersectionObserver((es) => {
+    clearInterval(lcdTimer);
+    if (es[0].isIntersecting) { loadLcd(); lcdTimer = setInterval(loadLcd, 1000); }
+  }).observe($("lcd-card"));
+
   function fillPolling() {
     const P = S.polling;
     $("pl-mode").value = P.mode; $("pl-cmd").value = P.command; $("pl-fmt").value = P.format; $("pl-units").value = P.units;
@@ -291,6 +330,9 @@
       format: $("vr-fmt").value, keep_days: +$("vr-keep").value, rate: +$("vr-rate").value, bitrate_kbps: +$("vr-br").value,
       preroll_ms: +$("vr-pre").value, hang_ms: +$("vr-hang").value, min_free_mb: +$("vr-free").value,
       voice_only: $("vr-voiceonly").checked } }),
+    lcd: () => ({ lcd: { enabled: $("lcd-on").checked, bus: +$("lcd-bus").value, address: $("lcd-addr").value.trim(),
+      size: $("lcd-size").value, backlight: $("lcd-bl").value, rotate_s: +$("lcd-rot").value,
+      flash_emergency: $("lcd-flash").checked } }),
     polling: () => ({ polling: { mode: $("pl-mode").value, command: $("pl-cmd").value, format: $("pl-fmt").value,
       units: $("pl-units").value, moving_s: +$("pl-moving").value, parked_s: +$("pl-parked").value,
       emergency_s: +$("pl-emerg").value, timeout_s: +$("pl-timeout").value, guard_s: +$("pl-guard").value,
@@ -443,12 +485,13 @@
   setInterval(() => { if (!$("cap-stop").hidden) loadCaptures(); }, 5000);
 
   // ---- load ----------------------------------------------------------------------
-  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillVoice(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
+  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillVoice(); fillLcd(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
   async function refresh() {
     try { SYS = await api("/api/system"); fillStatus(); } catch (e) { /* offline briefly */ }
   }
   [S, SYS] = await Promise.all([api("/api/settings"), api("/api/system")]);
   try { VOICE = await api("/api/voice"); } catch (e) { /* not an admin */ }
+  try { LCDI = await api("/api/lcd"); } catch (e) { /* older server */ }
   fillAll();
   fillUnits();
   ME = await api("/api/me");

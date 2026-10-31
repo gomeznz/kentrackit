@@ -42,6 +42,8 @@ DEFAULTS = {
     "reports": {"stop_min": 5, "stop_radius_m": 60},
     "recording": {"enabled": False, "device": "", "rate": 16000, "format": "opus", "bitrate_kbps": 16,
                   "keep_days": 90, "preroll_ms": 300, "hang_ms": 400, "voice_only": True, "min_free_mb": 1000},
+    "lcd": {"enabled": False, "bus": 1, "address": 0x27, "cols": 20, "rows": 4, "backlight": "auto",
+            "rotate_s": 5, "flash_emergency": True},
     "polling": {"mode": "off", "command": "", "format": "ascii", "units": "",
                 "moving_s": 20, "parked_s": 120, "emergency_s": 10,
                 "timeout_s": 8, "guard_s": 1.0, "max_per_min": 20},
@@ -342,6 +344,35 @@ def apply_patch(cfg, patch):
             R["voice_only"] = bool(rc["voice_only"])
         if R["enabled"] and not R["device"]:
             raise Invalid("Pick the sound card the monitor radio's audio is plugged into")
+
+    lc = patch.get("lcd")
+    if lc is not None:
+        C = new["lcd"]
+        if "enabled" in lc:
+            C["enabled"] = bool(lc["enabled"])
+        if "bus" in lc:
+            C["bus"] = _num(lc["bus"], 0, 20, "I2C bus", True)
+        if "address" in lc:
+            a = lc["address"]
+            try:
+                a = int(a, 0) if isinstance(a, str) else int(a)
+            except ValueError:
+                raise Invalid("Address should look like 0x27")
+            if not 0x03 <= a <= 0x77:
+                raise Invalid("I2C address must be between 0x03 and 0x77")
+            C["address"] = a
+        if "size" in lc:
+            if lc["size"] not in ("20x4", "16x2", "20x2", "16x4"):
+                raise Invalid("Display size must be 20x4, 20x2, 16x4 or 16x2")
+            C["cols"], C["rows"] = map(int, lc["size"].split("x"))
+        if "backlight" in lc:
+            if lc["backlight"] not in ("on", "auto", "off"):
+                raise Invalid("Backlight must be on, auto or off")
+            C["backlight"] = lc["backlight"]
+        if "rotate_s" in lc:
+            C["rotate_s"] = _num(lc["rotate_s"], 2, 60, "Page time", True)
+        if "flash_emergency" in lc:
+            C["flash_emergency"] = bool(lc["flash_emergency"])
 
     pl = patch.get("polling")
     if pl is not None:

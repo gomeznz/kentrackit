@@ -20,6 +20,7 @@ from .alerts import AlertEngine
 from .auth import Auth
 from .channel import Channel
 from .coverage import Coverage
+from .lcd import FrontPanel
 from .poller import Poller
 from .recorder import Recorder
 from .voice import VoiceRecorder
@@ -45,6 +46,8 @@ class App:
         self.coverage = Coverage(self)
         self.poller = Poller(self)
         self.recorder = Recorder(self)
+        self.panel = FrontPanel(self)
+        self.channel.load_last_voice()
         self.ser = None
         self.ser_lock = threading.Lock()
         self.tiles = TileCache(cfg, cfg["data_dir"])
@@ -86,6 +89,8 @@ class App:
                 notes.append("Reconnecting to the radio with the new serial settings.")
             if new["recording"] != old["recording"]:
                 self.voice.restart.set()
+            if new["lcd"] != old["lcd"]:
+                self.panel.restart.set()
             if new["tiles"] != old["tiles"]:
                 self.tiles = TileCache(new, new["data_dir"])
                 self.sat_tiles = TileCache(new, new["data_dir"], "sat")
@@ -305,6 +310,7 @@ def main(argv=None):
     threading.Thread(target=app.housekeeping, daemon=True).start()
     threading.Thread(target=app.poller.run, daemon=True, name="poller").start()
     threading.Thread(target=app.voice.run, daemon=True, name="voice").start()
+    threading.Thread(target=app.panel.run, daemon=True, name="lcd").start()
 
     signal.signal(signal.SIGTERM, lambda *_: app.stop.set())
     try:
