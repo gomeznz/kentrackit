@@ -135,8 +135,22 @@ for that, enter it as the dial command, with `{id}`, `{num}` or `{num5}` like th
 
 Listening works on plain http too.
 
-To test without radios: `python3 tools/fake_nxr.py --port 5070 --out /tmp/nxr` from the AirBridge repo,
-then point the NXR settings at `127.0.0.1:5070`.
+### Testing SIP without an NXR: `tools/fake_sip.py`
+
+A stand-in SIP endpoint, using only the Python standard library. It answers calls, records everything it hears
+to WAV, and talks back. Point Settings → Dispatch console → NXR address at the machine running it, using the port
+you give it.
+
+```bash
+python3 tools/fake_sip.py --port 5070 --echo 0.5                 # parrot: plays each over back 0.5 s after it ends
+python3 tools/fake_sip.py --port 5070 --play group.wav --every 20 # plays a WAV after answering, then every 20 s
+python3 tools/fake_sip.py --port 5070 --tone --auth secret        # 1 kHz tone; demands a SIP password
+python3 tools/fake_sip.py --port 5070 --reject 486                # refuses calls (busy), to test errors
+python3 tools/fake_sip.py --call 192.168.1.20:5064 --play group.wav --hangup 15   # calls KenTrackIt, like the NXR
+```
+
+Recordings go to `fake_sip_calls/`, one WAV per call. Other options: `--codec PCMA`, `--ring`, `--max`,
+`--silence` (continuous RTP) and `--vad-db`/`--gap` (what counts as an over). `--help` lists them all.
 
 ## What's New pop-up
 
