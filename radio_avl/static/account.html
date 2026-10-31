@@ -27,6 +27,7 @@
     </div>
     <p class="help" id="me-can"></p>
     <div class="actions">
+      <button type="button" id="whats-new">✦ What's new</button>
       <a href="/settings" class="btn" id="to-settings" hidden>Settings</a>
       <button id="signout" class="danger">Sign out</button>
     </div>
@@ -44,7 +45,9 @@
   </form>
 </div>
 <script src="/static/common.js"></script>
+<script src="/static/whatsnew.js"></script>
 <script>
+document.getElementById("whats-new").onclick = () => KTWhatsNew.show();
 "use strict";
 (async () => {
   const $ = (id) => document.getElementById(id);

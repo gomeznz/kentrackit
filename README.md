@@ -101,6 +101,16 @@ history, alerts, reports and exports (alerts not tied to a unit are shown to eve
   acknowledged alerts.
 - Scripts can use HTTP Basic auth with any account, e.g. `curl -u alex:… http://pi:8090/api/units`.
 
+## What's New pop-up
+
+After an update, each user sees a short "What's new" window the first time they open the map, then not
+again until the next update (it's remembered per user, on the server, so it follows them between
+devices). They can open the full history any time from **My account → What's new**.
+
+To announce an update: add a release at the top of `radio_avl/whatsnew.json` and set `VERSION` in
+`radio_avl/main.py` to match. Items with `"perm": "settings"` (or `listen`, `reports`...) only show to
+users who can use that feature. A brand-new user only sees the latest release, not the whole history.
+
 ## Files
 
 | Path | What |

@@ -72,6 +72,10 @@ class Auth:
         self.locked = {}                # key -> until
         self.basic_cache = {}           # Authorization header -> user id
         self.flock = threading.Lock()
+        with self.lock, self.db:
+            cols = {r[1] for r in self.db.execute("PRAGMA table_info(users)")}
+            if "whats_new_seen" not in cols:     # v0.7
+                self.db.execute("ALTER TABLE users ADD COLUMN whats_new_seen TEXT DEFAULT ''")
         self._migrate_legacy()
 
     # ---- users ------------------------------------------------------------
@@ -88,6 +92,10 @@ class Auth:
     def public(self, u):
         return {k: u[k] for k in ("id", "username", "display_name", "role", "role_label", "units",
                                   "enabled", "created", "last_login", "perms")}
+
+    def set_whats_new_seen(self, uid, version):
+        with self.lock, self.db:
+            self.db.execute("UPDATE users SET whats_new_seen=? WHERE id=?", (str(version)[:20], uid))
 
     def user(self, uid):
         with self.lock:

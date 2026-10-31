@@ -30,7 +30,7 @@ from .web import Broker, TileCache, serve, rebind
 log = logging.getLogger("radio-avl")
 
 class App:
-    VERSION = "0.6"
+    VERSION = "0.7"
 
     def __init__(self, cfg, config_path=None, mode="serial"):
         self.cfg = cfg

@@ -22,6 +22,47 @@ from .auth import AuthError, ROLES, REMEMBER_S
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 TILE_RE = re.compile(r"^/tiles/(sat/)?(\d{1,2})/(\d{1,7})/(\d{1,7})$")
+_WN = {"mtime": None, "releases": []}
+
+
+def _releases():
+    """Release notes from whatsnew.json (re-read if the file changes)."""
+    path = os.path.join(os.path.dirname(__file__), "whatsnew.json")
+    try:
+        mt = os.path.getmtime(path)
+        if mt != _WN["mtime"]:
+            with open(path, encoding="utf-8") as f:
+                _WN["releases"], _WN["mtime"] = json.load(f)["releases"], mt
+    except (OSError, ValueError, KeyError):
+        pass
+    return _WN["releases"]
+
+
+def whats_new(user, show_all=False):
+    """The releases this user hasn't seen yet (or all of them), with items they can't use left out.
+    Someone who's never seen any gets just the latest, not the whole history."""
+    rel = _releases()
+    if not rel:
+        return {"latest": None, "releases": []}
+    seen = user.get("whats_new_seen") or ""
+    versions = [r["version"] for r in rel]
+    if show_all:
+        pick = rel
+    elif seen == versions[0]:
+        pick = []
+    elif seen in versions:
+        pick = rel[:versions.index(seen)]
+    else:
+        pick = rel[:1]
+    perms = set(user["perms"])
+    out = []
+    for r in pick:
+        items = [i for i in r.get("items", []) if not i.get("perm") or i["perm"] in perms]
+        if items:
+            out.append({**{k: r.get(k) for k in ("version", "date", "title")}, "items": items})
+    return {"latest": versions[0], "releases": out}
+
+
 class _SafeCSV:
     """csv.writer that stops text like =HYPERLINK(...) (a radio name, a zone name) running as a
     formula when the file is opened in Excel. Numbers are left alone."""
@@ -409,6 +450,8 @@ def make_handler(app):
                 return self._json({"title": cfg["web"]["title"], "setup": app.auth.needs_setup()})
             if p == "/api/me":
                 return self._json(app.auth.public(self.user))
+            if p == "/api/whatsnew":
+                return self._json(whats_new(self.user, qs.get("all", ["0"])[0] == "1"))
 
             if not self._need("view"):
                 return
@@ -647,6 +690,12 @@ def make_handler(app):
                     app.auth.audit(self.user, "signed out")
                 return self._send(200, b'{"ok": true}', "application/json",
                                   {"Set-Cookie": self._cookie("", 0)})
+            if p == "/api/whatsnew/seen":
+                v = str(body.get("version", ""))
+                if v not in [r["version"] for r in _releases()]:
+                    return self._json({"error": "Unknown version"}, 400)
+                app.auth.set_whats_new_seen(self.user["id"], v)
+                return self._json({"ok": True})
             if p == "/api/me/password":
                 try:
                     app.auth.change_own_password(self.user, body.get("current", ""), body.get("new", ""), self.token)
