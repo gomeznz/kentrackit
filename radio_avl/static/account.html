@@ -54,7 +54,7 @@ document.getElementById("whats-new").onclick = () => KTWhatsNew.show();
   const toast = (m, err) => { const t = $("toast"); t.textContent = m; t.className = "toast" + (err ? " err" : ""); t.hidden = false; setTimeout(() => (t.hidden = true), 4000); };
   const me = await (await fetch("/api/me")).json();
   const CAN = { view: "see the live map", reports: "run trip reports", export: "export data", ack: "acknowledge alerts",
-                zones: "edit zones", units: "name units", settings: "change settings", users: "manage users", backup: "download backups" };
+                zones: "edit zones", units: "name units", listen: "play recordings", talk: "talk on the radio from the dispatch console", settings: "change settings", users: "manage users", backup: "download backups" };
   $("me-name").textContent = me.display_name || me.username;
   $("me-user").textContent = me.username;
   $("me-role").textContent = me.role_label;

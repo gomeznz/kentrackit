@@ -54,6 +54,7 @@
     $("web-title").value = S.web.title; $("s-title").textContent = S.web.title;
     document.title = S.web.title + " settings";
     $("web-port").value = S.web.port;
+    $("web-https").value = S.web.https_port || "";
     $("web-host").value = S.web.host;
     if (!$("web-host").value) {          // a host not in the list
       const o = document.createElement("option"); o.value = o.textContent = S.web.host;
@@ -130,6 +131,43 @@
     clearInterval(voiceTimer);
     if (es[0].isIntersecting) voiceTimer = setInterval(loadVoice, 500);
   }).observe($("voice-card"));
+
+  // ---- dispatch console ------------------------------------------------------------
+  let CON = null;
+  async function loadConsole() {
+    try { CON = await api("/api/console/devices"); } catch (e) { return; }
+    const st = CON.state;
+    $("cn-st").textContent = !st.enabled ? "Off" : (st.ready ? "Ready · " : "Problem: ") + st.detail;
+    $("cn-st").className = !st.enabled ? "" : st.ready ? "ok-text" : "bad-text";
+  }
+  function fillConsole() {
+    const C = S.console;
+    $("cn-on").checked = C.enabled; $("cn-path").value = C.path; $("cn-group").value = C.group_name;
+    $("cn-gpio").value = C.ptt_gpio; $("cn-inv").checked = C.ptt_invert; $("cn-pcmd").value = C.private_command;
+    $("cn-pfmt").value = C.private_format; $("cn-pdelay").value = C.private_delay_ms;
+    $("cn-host").value = C.nxr_host; $("cn-port").value = C.nxr_port; $("cn-user").value = C.nxr_user;
+    $("cn-lport").value = C.sip_local_port; $("cn-auser").value = C.sip_auth_user; $("cn-apass").value = "";
+    $("cn-apass").placeholder = C.sip_password_set ? "unchanged" : "none";
+    $("cn-codec").value = C.sip_codec; $("cn-hold").value = C.sip_hold_s; $("cn-reg").checked = C.sip_register; $("cn-in").checked = C.sip_inbound;
+    $("cn-max").value = C.max_talk_s; $("cn-over").checked = C.talk_over_busy; $("cn-lead").value = C.ptt_lead_ms; $("cn-tail").value = C.ptt_tail_ms;
+    const opts = (sel, list, cur, blank) => {
+      const e = $(sel); e.replaceChildren();
+      const add = (v, t) => { const o = document.createElement("option"); o.value = v; o.textContent = t; e.appendChild(o); };
+      add("", blank);
+      for (const [v, t] of list) add(v, t);
+      if (cur && ![...e.options].some((o) => o.value === cur)) add(cur, cur);
+      e.value = cur;
+    };
+    opts("cn-hid", ((CON && CON.hid) || []).map((h) => [h, h]), C.hid_device, "Find it automatically");
+    opts("cn-play", [...((CON && CON.playback) || []).map((d) => [d.device, `${d.name} (${d.device})`]), ["test", "Test (no sound card)"]],
+         C.playback_device, "Same sound card as voice recording");
+    showConsoleFields();
+  }
+  function showConsoleFields() { $("cn-k5").hidden = $("cn-path").value !== "k5tra"; $("cn-sip").hidden = $("cn-path").value !== "nxr_sip"; }
+  $("cn-path").onchange = showConsoleFields;
+  let conTimer = null;
+  new IntersectionObserver((es) => { clearInterval(conTimer); if (es[0].isIntersecting) { loadConsole(); conTimer = setInterval(loadConsole, 3000); } })
+    .observe($("console-card"));
 
   // ---- front-panel LCD -----------------------------------------------------------
   let LCDI = null;
@@ -309,7 +347,8 @@
       port: $("serial-port").value === "__custom" ? $("serial-custom").value.trim() : $("serial-port").value,
       baud: +$("serial-baud").value } }),
     web: () => {
-      return { web: { title: $("web-title").value, port: +$("web-port").value, host: $("web-host").value } };
+      return { web: { title: $("web-title").value, port: +$("web-port").value, host: $("web-host").value,
+                      https_port: +$("web-https").value || 0 } };
     },
     map: () => {
       const t = { source: $("tile-source").value, custom_url: $("tile-url").value,
@@ -330,6 +369,17 @@
       format: $("vr-fmt").value, keep_days: +$("vr-keep").value, rate: +$("vr-rate").value, bitrate_kbps: +$("vr-br").value,
       preroll_ms: +$("vr-pre").value, hang_ms: +$("vr-hang").value, min_free_mb: +$("vr-free").value,
       voice_only: $("vr-voiceonly").checked } }),
+    console: () => {
+      const c = { enabled: $("cn-on").checked, path: $("cn-path").value, group_name: $("cn-group").value.trim(),
+        hid_device: $("cn-hid").value, playback_device: $("cn-play").value, ptt_gpio: +$("cn-gpio").value, ptt_invert: $("cn-inv").checked,
+        private_command: $("cn-pcmd").value, private_format: $("cn-pfmt").value, private_delay_ms: +$("cn-pdelay").value,
+        nxr_host: $("cn-host").value.trim(), nxr_port: +$("cn-port").value, nxr_user: $("cn-user").value.trim(),
+        sip_local_port: +$("cn-lport").value, sip_auth_user: $("cn-auser").value.trim(), sip_codec: $("cn-codec").value,
+        sip_hold_s: +$("cn-hold").value, sip_register: $("cn-reg").checked, sip_inbound: $("cn-in").checked,
+        max_talk_s: +$("cn-max").value, talk_over_busy: $("cn-over").checked, ptt_lead_ms: +$("cn-lead").value, ptt_tail_ms: +$("cn-tail").value };
+      if ($("cn-apass").value) c.sip_auth_password = $("cn-apass").value;
+      return { console: c };
+    },
     lcd: () => ({ lcd: { enabled: $("lcd-on").checked, bus: +$("lcd-bus").value, address: $("lcd-addr").value.trim(),
       size: $("lcd-size").value, backlight: $("lcd-bl").value, rotate_s: +$("lcd-rot").value,
       flash_emergency: $("lcd-flash").checked } }),
@@ -485,13 +535,14 @@
   setInterval(() => { if (!$("cap-stop").hidden) loadCaptures(); }, 5000);
 
   // ---- load ----------------------------------------------------------------------
-  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillVoice(); fillLcd(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
+  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillVoice(); fillConsole(); fillLcd(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
   async function refresh() {
     try { SYS = await api("/api/system"); fillStatus(); } catch (e) { /* offline briefly */ }
   }
   [S, SYS] = await Promise.all([api("/api/settings"), api("/api/system")]);
   try { VOICE = await api("/api/voice"); } catch (e) { /* not an admin */ }
   try { LCDI = await api("/api/lcd"); } catch (e) { /* older server */ }
+  try { CON = await api("/api/console/devices"); } catch (e) { /* older server */ }
   fillAll();
   fillUnits();
   ME = await api("/api/me");

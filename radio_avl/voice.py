@@ -138,7 +138,8 @@ class VoiceRecorder:
     def run(self):
         while not self.app.stop.is_set():
             c = self.cfg
-            if not c["enabled"] or not c["device"]:
+            listen = self.app.cfg["console"]["enabled"]
+            if not (c["enabled"] or listen) or not c["device"]:
                 self._state("off")
                 self.restart.wait(2); self.restart.clear()
                 continue
@@ -150,6 +151,7 @@ class VoiceRecorder:
                 while not self.app.stop.is_set() and not self.restart.is_set():
                     data = src.read()
                     self._meter(data)
+                    self.app.talk.listen_feed(data, c["rate"])
                     with self.mx:
                         self.pre.append(data)
                         while len(self.pre) > pre_n:

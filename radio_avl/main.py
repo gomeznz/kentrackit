@@ -21,6 +21,7 @@ from .auth import Auth
 from .channel import Channel
 from .coverage import Coverage
 from .lcd import FrontPanel
+from .talk import Talk
 from .poller import Poller
 from .recorder import Recorder
 from .voice import VoiceRecorder
@@ -30,7 +31,7 @@ from .web import Broker, TileCache, serve, rebind
 log = logging.getLogger("radio-avl")
 
 class App:
-    VERSION = "0.7"
+    VERSION = "0.8"
 
     def __init__(self, cfg, config_path=None, mode="serial"):
         self.cfg = cfg
@@ -47,6 +48,7 @@ class App:
         self.poller = Poller(self)
         self.recorder = Recorder(self)
         self.panel = FrontPanel(self)
+        self.talk = Talk(self)
         self.channel.load_last_voice()
         self.ser = None
         self.ser_lock = threading.Lock()
@@ -74,7 +76,9 @@ class App:
             new_server = None
             if new["web"]["port"] != old["web"]["port"]:
                 new_server = rebind(self, new)          # raises if the port is taken
-            elif new["web"]["host"] != old["web"]["host"]:
+            if new["web"]["https_port"] != old["web"]["https_port"]:
+                notes.append("Restart the service to apply the HTTPS change.")
+            if new["web"]["port"] == old["web"]["port"] and new["web"]["host"] != old["web"]["host"]:
                 notes.append("Restart the service to apply the new listen address.")
             if self.config_path:
                 try:
@@ -91,6 +95,10 @@ class App:
                 self.voice.restart.set()
             if new["lcd"] != old["lcd"]:
                 self.panel.restart.set()
+            if new["console"] != old["console"]:
+                self.talk.restart.set()
+                if new["console"]["enabled"] != old["console"]["enabled"]:
+                    self.voice.restart.set()        # live listen needs the sound card open
             if new["tiles"] != old["tiles"]:
                 self.tiles = TileCache(new, new["data_dir"])
                 self.sat_tiles = TileCache(new, new["data_dir"], "sat")
@@ -311,6 +319,7 @@ def main(argv=None):
     threading.Thread(target=app.poller.run, daemon=True, name="poller").start()
     threading.Thread(target=app.voice.run, daemon=True, name="voice").start()
     threading.Thread(target=app.panel.run, daemon=True, name="lcd").start()
+    threading.Thread(target=app.talk.run, daemon=True, name="talk").start()
 
     signal.signal(signal.SIGTERM, lambda *_: app.stop.set())
     try:

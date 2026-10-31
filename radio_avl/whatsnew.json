@@ -2,22 +2,78 @@
   "_help": "Newest release first. Each user sees the releases newer than the last one they've seen, once. Add a release at the top and bump VERSION in main.py to match. An item with \"perm\" is only shown to users with that permission (e.g. settings = administrators).",
   "releases": [
     {
+      "version": "0.8",
+      "date": "2026-11-01",
+      "title": "Two-way dispatch console",
+      "items": [
+        {
+          "icon": "🎧",
+          "title": "Talk to the fleet from your browser",
+          "text": "The new Dispatch page: pick the group or a unit, hold the big button (or Space) and talk. One dispatcher at a time, and it won't talk over a busy channel.",
+          "link": "/console",
+          "link_text": "Open Dispatch",
+          "perm": "talk"
+        },
+        {
+          "icon": "🔊",
+          "title": "Listen live",
+          "text": "Hear the channel as it happens on the Dispatch page, with recent calls and their recordings beside it.",
+          "link": "/console",
+          "link_text": "Open Dispatch",
+          "perm": "listen"
+        },
+        {
+          "icon": "📡",
+          "title": "K5TRA or NXR",
+          "text": "Talk through the monitor radio with a K5TRA, or straight into the NXR-1800 over SIP. Set it up under Settings → Dispatch console, along with HTTPS for using the microphone on the office network.",
+          "link": "/settings#console-card",
+          "link_text": "Set it up",
+          "perm": "settings"
+        },
+        {
+          "icon": "🚨",
+          "title": "Emergencies on the console",
+          "text": "An emergency shows across the top of the Dispatch page with a button to talk straight to that unit.",
+          "perm": "talk"
+        }
+      ]
+    },
+    {
       "version": "0.7",
       "date": "2026-11-01",
       "title": "Caller ID, front-panel display and more",
       "items": [
-        {"icon": "📞", "title": "Who's calling",
-         "text": "Voice calls now carry the caller's ID and radio name straight from the radio, so the on-air banner, the Channel log and recordings all show who was talking."},
-        {"icon": "🏆", "title": "Most Active",
-         "text": "A full-screen leaderboard of the busiest units: distance, time moving, talk time and calls. Open it from Reports.",
-         "link": "/reports", "link_text": "Open Reports", "perm": "reports"},
-        {"icon": "📟", "title": "Front-panel display",
-         "text": "A 20×4 LCD on the Pi can show who's on air, the last caller and alerts, and flashes for emergencies. Set it up under Settings → Front-panel display.",
-         "link": "/settings#lcd-card", "link_text": "Set it up", "perm": "settings"},
-        {"icon": "🛡️", "title": "Security update",
-         "text": "Tighter protection for the web pages and exports. Nothing for you to do."},
-        {"icon": "✨", "title": "What's New",
-         "text": "This window. It appears once after each update; open it again any time from My account."}
+        {
+          "icon": "📞",
+          "title": "Who's calling",
+          "text": "Voice calls now carry the caller's ID and radio name straight from the radio, so the on-air banner, the Channel log and recordings all show who was talking."
+        },
+        {
+          "icon": "🏆",
+          "title": "Most Active",
+          "text": "A full-screen leaderboard of the busiest units: distance, time moving, talk time and calls. Open it from Reports.",
+          "link": "/reports",
+          "link_text": "Open Reports",
+          "perm": "reports"
+        },
+        {
+          "icon": "📟",
+          "title": "Front-panel display",
+          "text": "A 20×4 LCD on the Pi can show who's on air, the last caller and alerts, and flashes for emergencies. Set it up under Settings → Front-panel display.",
+          "link": "/settings#lcd-card",
+          "link_text": "Set it up",
+          "perm": "settings"
+        },
+        {
+          "icon": "🛡️",
+          "title": "Security update",
+          "text": "Tighter protection for the web pages and exports. Nothing for you to do."
+        },
+        {
+          "icon": "✨",
+          "title": "What's New",
+          "text": "This window. It appears once after each update; open it again any time from My account."
+        }
       ]
     },
     {
@@ -25,14 +81,29 @@
       "date": "2026-10-31",
       "title": "Voice recording, coverage and channel load",
       "items": [
-        {"icon": "🎙️", "title": "Voice recording",
-         "text": "Every voice call can be recorded and played back from the map or the Channel page.", "perm": "listen"},
-        {"icon": "📶", "title": "Coverage map",
-         "text": "See where units are heard well and where polls go missing: the coverage button on the map."},
-        {"icon": "📊", "title": "Channel page",
-         "text": "How busy the channel is, hour by hour, and a log of every transmission.", "link": "/channel", "link_text": "Open Channel"},
-        {"icon": "🗣️", "title": "Who's talking",
-         "text": "The unit on air lights up on the map, with an ON AIR banner at the top."}
+        {
+          "icon": "🎙️",
+          "title": "Voice recording",
+          "text": "Every voice call can be recorded and played back from the map or the Channel page.",
+          "perm": "listen"
+        },
+        {
+          "icon": "📶",
+          "title": "Coverage map",
+          "text": "See where units are heard well and where polls go missing: the coverage button on the map."
+        },
+        {
+          "icon": "📊",
+          "title": "Channel page",
+          "text": "How busy the channel is, hour by hour, and a log of every transmission.",
+          "link": "/channel",
+          "link_text": "Open Channel"
+        },
+        {
+          "icon": "🗣️",
+          "title": "Who's talking",
+          "text": "The unit on air lights up on the map, with an ON AIR banner at the top."
+        }
       ]
     }
   ]

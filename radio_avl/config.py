@@ -34,7 +34,7 @@ DEFAULTS = {
     "data_dir": "data",
     "keep_days": 365,
     "web": {"host": "0.0.0.0", "port": 8090, "title": "KenTrackIt",
-            "username": "admin", "password_hash": ""},
+            "username": "admin", "password_hash": "", "https_port": 0},
     "map": {"center": [-46.413, 168.353], "zoom": 12},
     "display": {"stale_after_s": 60, "lost_after_s": 900, "speed_units": "kmh", "trail_min": 30},
     "alerts": {"overdue_min": 10, "speed_limit_kmh": 0, "status_watch": True,
@@ -42,6 +42,13 @@ DEFAULTS = {
     "reports": {"stop_min": 5, "stop_radius_m": 60},
     "recording": {"enabled": False, "device": "", "rate": 16000, "format": "opus", "bitrate_kbps": 16,
                   "keep_days": 90, "preroll_ms": 300, "hang_ms": 400, "voice_only": True, "min_free_mb": 1000},
+    "console": {"enabled": False, "path": "test", "group_name": "All units", "max_talk_s": 60,
+                "talk_over_busy": False, "ptt_lead_ms": 300, "ptt_tail_ms": 200,
+                "hid_device": "", "ptt_gpio": 3, "ptt_invert": False, "playback_device": "",
+                "private_command": "", "private_format": "ascii", "private_delay_ms": 300,
+                "nxr_host": "", "nxr_port": 5060, "nxr_user": "", "sip_local_port": 5064,
+                "sip_auth_user": "", "sip_auth_password": "", "sip_register": False, "sip_codec": "PCMU",
+                "sip_hold_s": 8, "sip_inbound": True},
     "lcd": {"enabled": False, "bus": 1, "address": 0x27, "cols": 20, "rows": 4, "backlight": "auto",
             "rotate_s": 5, "flash_emergency": True},
     "polling": {"mode": "off", "command": "", "format": "ascii", "units": "",
@@ -166,6 +173,7 @@ def public(cfg):
     out["web"]["password_set"] = bool(out["web"].pop("password_hash", ""))
     out["tiles"]["linz_key_set"] = bool(out["tiles"].get("linz_key"))
     out["tiles"]["linz_key"] = ""
+    out["console"]["sip_password_set"] = bool(out["console"].pop("sip_auth_password", ""))
     return out
 
 
@@ -214,6 +222,11 @@ def apply_patch(cfg, patch):
             new["web"]["host"] = h
         if "port" in w:
             new["web"]["port"] = _num(w["port"], 1024, 65535, "Web port", True)
+        if "https_port" in w:
+            hp = _num(w["https_port"], 0, 65535, "HTTPS port", True)
+            if hp and hp < 1024:
+                raise Invalid("HTTPS port must be 1024 or above (or 0 for off)")
+            new["web"]["https_port"] = hp
         if "title" in w:
             t = str(w["title"]).strip()
             if not 1 <= len(t) <= 60:
@@ -344,6 +357,65 @@ def apply_patch(cfg, patch):
             R["voice_only"] = bool(rc["voice_only"])
         if R["enabled"] and not R["device"]:
             raise Invalid("Pick the sound card the monitor radio's audio is plugged into")
+
+    cn = patch.get("console")
+    if cn is not None:
+        K = new["console"]
+        for k in ("enabled", "talk_over_busy", "ptt_invert", "sip_register", "sip_inbound"):
+            if k in cn:
+                K[k] = bool(cn[k])
+        if "path" in cn:
+            if cn["path"] not in ("test", "k5tra", "nxr_sip"):
+                raise Invalid("Talk path must be test, k5tra or nxr_sip")
+            K["path"] = cn["path"]
+        if "group_name" in cn:
+            g = str(cn["group_name"]).strip()
+            if not 1 <= len(g) <= 30:
+                raise Invalid("Group name: 1-30 characters")
+            K["group_name"] = g
+        for k, lo, hi, name in (("max_talk_s", 5, 600, "Talk time limit"), ("ptt_lead_ms", 0, 2000, "PTT lead"),
+                                ("ptt_tail_ms", 0, 2000, "PTT tail"), ("ptt_gpio", 1, 8, "PTT GPIO"),
+                                ("private_delay_ms", 0, 5000, "Private call delay"), ("nxr_port", 1, 65535, "NXR SIP port"),
+                                ("sip_local_port", 1024, 65535, "Local SIP port"), ("sip_hold_s", 0, 120, "Call hold")):
+            if k in cn:
+                K[k] = _num(cn[k], lo, hi, name, True)
+        if "hid_device" in cn:
+            h = str(cn["hid_device"]).strip()
+            if h and not re.fullmatch(r"/dev/hidraw\d{1,2}", h):
+                raise Invalid("K5TRA device should look like /dev/hidraw0 (or blank to find it)")
+            K["hid_device"] = h
+        if "playback_device" in cn:
+            d = str(cn["playback_device"]).strip()
+            if d and not (d == "test" or re.fullmatch(r"[A-Za-z0-9_:=,.\-]{1,80}", d)):
+                raise Invalid("Sound card should look like plughw:CARD=Device,DEV=0")
+            K["playback_device"] = d
+        if "private_command" in cn:
+            K["private_command"] = str(cn["private_command"])[:200]
+        if "private_format" in cn:
+            if cn["private_format"] not in ("ascii", "hex"):
+                raise Invalid("Command format must be ascii or hex")
+            K["private_format"] = cn["private_format"]
+        if "nxr_host" in cn:
+            h = str(cn["nxr_host"]).strip()
+            if h and not re.fullmatch(r"[A-Za-z0-9.\-]{1,253}", h):
+                raise Invalid("NXR address should be an IP address or host name")
+            K["nxr_host"] = h
+        for k in ("nxr_user", "sip_auth_user"):
+            if k in cn:
+                v = str(cn[k]).strip()
+                if v and not re.fullmatch(r"[A-Za-z0-9._*#+\-]{1,64}", v):
+                    raise Invalid("SIP numbers and user names: letters, digits and . _ * # + -")
+                K[k] = v
+        if cn.get("sip_auth_password"):
+            K["sip_auth_password"] = str(cn["sip_auth_password"])[:128]
+        if cn.get("clear_sip_password"):
+            K["sip_auth_password"] = ""
+        if "sip_codec" in cn:
+            if cn["sip_codec"] not in ("PCMU", "PCMA"):
+                raise Invalid("Codec must be PCMU or PCMA")
+            K["sip_codec"] = cn["sip_codec"]
+        if K["enabled"] and K["path"] == "nxr_sip" and not K["nxr_host"]:
+            raise Invalid("Enter the NXR's IP address")
 
     lc = patch.get("lcd")
     if lc is not None:

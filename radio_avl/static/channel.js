@@ -170,8 +170,10 @@
       pc.appendChild(b);
     }
     tr.appendChild(pc);
-    const k = el("span", "kind"); const i = el("i"); i.style.background = `var(${(KINDS.find((x) => x[0] === r.kind) || KINDS[0])[2]})`;
-    k.append(i, (KINDS.find((x) => x[0] === r.kind) || [0, r.kind])[1]);
+    const kd = r.kind === "dispatch" ? ["dispatch", "Dispatch", "--series-voice"] : (KINDS.find((x) => x[0] === r.kind) || [r.kind, r.kind, KINDS[0][2]]);
+    const k = el("span", "kind"); const i = el("i"); i.style.background = `var(${kd[2]})`;
+    if (r.kind === "dispatch") i.style.borderRadius = "2px";
+    k.append(i, kd[1]);
     const kt = el("td"); kt.appendChild(k);
     tr.append(el("td", null, tm(r.start, span > 86400)), el("td", "n", r.duration < 10 ? r.duration.toFixed(1) + " s" : dur(r.duration)),
       kt, el("td", null, nameOf(r.unit_id)), el("td", "muted", r.display || ""));

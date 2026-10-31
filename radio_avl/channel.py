@@ -231,7 +231,7 @@ class Channel:
             s, e, kind = max(r["start"], t0), min(r["end"], t1), r["kind"]
             if e <= s:
                 continue
-            kind = kind if kind in totals else "data"
+            kind = "voice" if kind == "dispatch" else (kind if kind in totals else "data")
             totals[kind] += e - s
             counts[kind] += 1
             if not longest or (r["end"] - r["start"]) > longest["duration"]:

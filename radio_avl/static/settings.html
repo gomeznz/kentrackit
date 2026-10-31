@@ -61,6 +61,11 @@
       </label>
     </div>
     <p class="help">Ports already in use on this Pi: <span id="ports-used">–</span></p>
+    <label>HTTPS port for the office network <input id="web-https" type="number" min="0" max="65535" placeholder="0 = off"></label>
+    <p class="help">Browsers only let the dispatch console use the microphone on a secure (https) page. Through the
+      Cloudflare tunnel that's already the case. To talk from a PC on the office network, set a port here (e.g. 8443),
+      restart the service, then open <code>https://&lt;this box&gt;:&lt;port&gt;/console</code>. The certificate is
+      made by this box, so each browser asks you to accept it once.</p>
     <p class="help">Sign-in accounts are managed under <a href="#users-card">Users</a>.</p>
     <div class="actions"><button type="submit">Save</button></div>
   </form>
@@ -275,6 +280,86 @@
       <div><span class="k">Recordings</span><span id="vr-usage">–</span></div>
     </div>
     <div class="actions"><a class="btn" href="/channel">Listen on the Channel page</a><button type="submit">Save</button></div>
+  </form>
+
+  <!-- Dispatch console -->
+  <form class="card" data-section="console" id="console-card">
+    <h2>Dispatch console</h2>
+    <p class="help">Lets dispatchers talk to units from the browser, and listen to the channel live, on the
+      <a href="/console">Dispatch</a> page. One dispatcher talks at a time; every over is logged on the Channel page and recorded.
+      Live listening uses the sound card set under Voice recording.</p>
+    <label class="check"><input type="checkbox" id="cn-on"> Turn on the dispatch console</label>
+    <div class="two">
+      <label>Talk path
+        <select id="cn-path">
+          <option value="k5tra">K5TRA: the monitor radio transmits</option>
+          <option value="nxr_sip">NXR-1800 over SIP</option>
+          <option value="test">Test mode: nothing is transmitted</option>
+        </select>
+      </label>
+      <label>Group name, as dispatchers see it <input id="cn-group" maxlength="30" required></label>
+    </div>
+
+    <div id="cn-k5" class="sub-form">
+      <h3>K5TRA</h3>
+      <p class="help">Wire the K5TRA's audio out to the radio's mic input and its PTT to the radio's PTT
+        (accessory connector). The radio transmits on whatever channel and group it's set to.</p>
+      <div class="two">
+        <label>K5TRA <select id="cn-hid"></select></label>
+        <label>Audio out to <select id="cn-play"></select></label>
+      </div>
+      <div class="two">
+        <label>PTT on GPIO <input id="cn-gpio" type="number" min="1" max="8"></label>
+        <label class="check"><input type="checkbox" id="cn-inv"> PTT is active low (inverted)</label>
+      </div>
+      <h3>Private calls</h3>
+      <p class="help">To let dispatchers talk to one unit only, the radio has to dial that unit's ID before keying up.
+        Enter the radio's serial command for that (placeholders as for polling: <code>{id}</code>,
+        <code>{num}</code>, <code>{num5}</code>). Leave blank for group calls only.</p>
+      <div class="two">
+        <label>Dial command <input id="cn-pcmd" placeholder="(not known yet)" spellcheck="false"></label>
+        <label>Format <select id="cn-pfmt"><option value="ascii">Text (\x02 escapes)</option><option value="hex">Hex bytes</option></select></label>
+      </div>
+      <label>Wait after dialling <span class="unit-input"><input id="cn-pdelay" type="number" min="0" max="5000">ms</span></label>
+    </div>
+
+    <div id="cn-sip" class="sub-form">
+      <h3>NXR-1800 SIP</h3>
+      <p class="help">KenTrackIt calls the NXR's SIP interface directly (no PBX), the same way AirBridge does. The NXR
+        puts the audio out on its configured group. Calls the NXR makes to KenTrackIt are played on the console.</p>
+      <div class="two">
+        <label>NXR address <input id="cn-host" placeholder="192.168.1.50"></label>
+        <label>SIP port <input id="cn-port" type="number" min="1" max="65535"></label>
+      </div>
+      <div class="two">
+        <label>Number to dial (if any) <input id="cn-user" placeholder="blank = none"></label>
+        <label>Our SIP port <input id="cn-lport" type="number" min="1024" max="65535"></label>
+      </div>
+      <div class="two">
+        <label>Auth user <input id="cn-auser" autocomplete="off"></label>
+        <label>Auth password <input id="cn-apass" type="password" autocomplete="new-password" placeholder="unchanged"></label>
+      </div>
+      <div class="two">
+        <label>Codec <select id="cn-codec"><option value="PCMU">G.711 µ-law (PCMU)</option><option value="PCMA">G.711 A-law (PCMA)</option></select></label>
+        <label>Keep the call open after each over <span class="unit-input"><input id="cn-hold" type="number" min="0" max="120">s</span></label>
+      </div>
+      <label class="check"><input type="checkbox" id="cn-reg"> Register with the NXR first</label>
+      <label class="check"><input type="checkbox" id="cn-in"> Accept calls from the NXR (play group traffic on the console)</label>
+    </div>
+
+    <details>
+      <summary>Safety and timing</summary>
+      <div class="two">
+        <label>Longest a dispatcher can talk <span class="unit-input"><input id="cn-max" type="number" min="5" max="600">s</span></label>
+        <label class="check"><input type="checkbox" id="cn-over"> Allow talking over a busy channel</label>
+      </div>
+      <div class="two">
+        <label>Key up before audio <span class="unit-input"><input id="cn-lead" type="number" min="0" max="2000">ms</span></label>
+        <label>Hold after audio <span class="unit-input"><input id="cn-tail" type="number" min="0" max="2000">ms</span></label>
+      </div>
+    </details>
+    <div class="status-grid"><div><span class="k">Talk path</span><span id="cn-st">–</span></div></div>
+    <div class="actions"><a class="btn" href="/console">Open the console</a><button type="submit">Save</button></div>
   </form>
 
   <!-- Front-panel LCD -->

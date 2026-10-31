@@ -3,7 +3,13 @@
 set -e
 [ "$(id -u)" = 0 ] || { echo "Run with sudo"; exit 1; }
 
-apt-get install -y python3 python3-serial alsa-utils opus-tools iproute2 >/dev/null
+apt-get install -y python3 python3-serial python3-numpy alsa-utils opus-tools iproute2 openssl >/dev/null
+
+# Dispatch console: let the audio group key the K5TRA's PTT (C-Media USB HID)
+cat > /etc/udev/rules.d/90-kentrackit-cm119.rules <<'RULE'
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0d8c", GROUP="audio", MODE="0660"
+RULE
+udevadm control --reload-rules && udevadm trigger --subsystem-match=hidraw || true
 
 id radio-avl >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin radio-avl
 usermod -aG dialout,audio radio-avl

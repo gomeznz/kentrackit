@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/static/logo-mark.svg">
+<meta name="theme-color" content="#08111f">
+<title>Dispatch console</title>
+<link rel="stylesheet" href="/static/console.css">
+</head>
+<body>
+<header class="bar">
+  <a href="/" class="back" title="Back to the map">←</a>
+  <img src="/static/logo-mark.svg" alt="" class="logo">
+  <h1>Dispatch <span id="site"></span></h1>
+  <div class="pills">
+    <span class="pill" id="p-link" title="Serial link to the monitor radio"><i></i><span>Radio</span></span>
+    <span class="pill" id="p-path" title="Talk path"><i></i><span>Talk</span></span>
+    <span class="pill" id="p-chan" title="Channel"><i></i><span>Channel clear</span></span>
+  </div>
+  <div class="listen">
+    <button id="listen" class="tog" aria-pressed="false" title="Hear the channel live">🔇 Listen</button>
+    <input type="range" id="vol" min="0" max="1.5" step="0.05" value="1" aria-label="Volume">
+    <div class="meter small" title="Incoming audio"><b id="rx-meter"></b></div>
+  </div>
+  <span class="clock" id="clock"></span>
+</header>
+
+<div id="emerg" class="emerg" hidden role="alert">
+  <span class="siren">🚨</span><div><b id="emerg-title">EMERGENCY</b><span id="emerg-detail"></span></div>
+  <button id="emerg-talk">Talk to them</button><button id="emerg-ack" class="ghost">Acknowledge</button>
+</div>
+
+<main class="grid">
+  <aside class="col units">
+    <div class="col-head"><h2>Talk to</h2><input id="q" type="search" placeholder="Find a unit…" aria-label="Find a unit"></div>
+    <div id="group-row"></div>
+    <ul id="unit-list" class="list"></ul>
+  </aside>
+
+  <section class="col stage">
+    <div class="target">
+      <div class="t-kicker" id="t-kicker">Group call</div>
+      <div class="t-name" id="t-name">All units</div>
+      <div class="t-sub" id="t-sub"></div>
+      <div class="seg" id="mode" role="radiogroup" aria-label="Call type">
+        <button data-m="group" class="on" role="radio" aria-checked="true">Group</button>
+        <button data-m="unit" role="radio" aria-checked="false">Private</button>
+      </div>
+      <p class="why" id="why"></p>
+    </div>
+
+    <div class="incoming" id="incoming" hidden><span class="dot"></span><span id="incoming-text"></span></div>
+
+    <div class="ptt-wrap">
+      <button id="ptt" class="ptt" disabled aria-describedby="ptt-hint">
+        <span class="ring"></span>
+        <span class="mic">🎙</span>
+        <span class="lbl" id="ptt-lbl">Hold to talk</span>
+        <span class="timer" id="ptt-timer"></span>
+      </button>
+      <svg class="limit" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48" id="limit-arc"/></svg>
+    </div>
+    <p class="hint" id="ptt-hint">Hold the button, or hold <kbd>Space</kbd>, while you speak.</p>
+    <div class="meter" title="Your microphone"><b id="mic-meter"></b></div>
+    <p class="status" id="status" role="status"></p>
+    <p class="secure-note" id="secure-note" hidden></p>
+  </section>
+
+  <aside class="col calls">
+    <div class="col-head"><h2>Recent calls</h2><a href="/channel" class="more">Channel log →</a></div>
+    <ul id="calls" class="list calls-list"></ul>
+  </aside>
+</main>
+<script src="/static/common.js"></script>
+<script src="/static/player.js"></script>
+<script src="/static/console.js"></script>
+</body>
+</html>

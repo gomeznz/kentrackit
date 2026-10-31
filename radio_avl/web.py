@@ -1,13 +1,19 @@
 """HTTP server: UI, JSON API, settings, live updates (Server-Sent Events), tile cache."""
+import base64
 import csv
+import hashlib
 import io
 import json
+import logging
 import mimetypes
 import os
 import queue
 import re
 import shutil
 import socket
+import ssl
+import struct
+import subprocess
 import tempfile
 import threading
 import time
@@ -17,7 +23,9 @@ from http.cookies import SimpleCookie
 from urllib.parse import urlparse, parse_qs, quote
 
 from . import config as config_mod
-from . import geo, reports, voice as voice_mod, lcd as lcd_mod
+
+log = logging.getLogger("radio-avl")
+from . import geo, reports, voice as voice_mod, lcd as lcd_mod, talk as talk_mod
 from .auth import AuthError, ROLES, REMEMBER_S
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -389,7 +397,7 @@ def make_handler(app):
             parts = [f"{COOKIE}={token}", "Path=/", "HttpOnly", "SameSite=Strict"]
             if max_age is not None:
                 parts.append(f"Max-Age={max_age}")
-            if self.headers.get("X-Forwarded-Proto", "") == "https":
+            if self.headers.get("X-Forwarded-Proto", "") == "https" or isinstance(self.connection, ssl.SSLSocket):
                 parts.append("Secure")
             return "; ".join(parts)
 
@@ -442,6 +450,19 @@ def make_handler(app):
                 return self._static("channel.html") if self._need("reports") else None
             if p in ("/account", "/account/"):
                 return self._static("account.html")
+            if p in ("/console", "/console/"):
+                return self._static("console.html") if self._need("listen") else None
+            if p == "/api/console/ws":
+                return self._ws_console()
+            if p == "/api/console/devices":
+                if not self._need("settings"):
+                    return
+                return self._json({"state": app.talk.state(), "hid": talk_mod.find_hidraw(), "playback": talk_mod.list_playback()})
+            if p == "/api/console":
+                if not self._need("listen"):
+                    return
+                return self._json(dict(app.talk.state(), can_talk=app.auth.can(self.user, "talk"),
+                                       can_ack=app.auth.can(self.user, "ack"), https_port=cfg["web"]["https_port"]))
             if p.startswith("/static/"):
                 return self._static(p[len("/static/"):])
 
@@ -1007,6 +1028,85 @@ def make_handler(app):
             self._send(200, data, "application/octet-stream",
                        {"Content-Disposition": f'attachment; filename="{name}"'})
 
+        # ---- dispatch console audio: a minimal WebSocket ------------------------------------
+        def _ws_console(self):
+            if not self._need("listen"):
+                return
+            if not self._same_origin():
+                return self._json({"error": "Cross-site request refused"}, 403)
+            key = self.headers.get("Sec-WebSocket-Key")
+            if self.headers.get("Upgrade", "").lower() != "websocket" or not key:
+                return self._json({"error": "WebSocket expected"}, 400)
+            accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
+            self.send_response(101, "Switching Protocols")
+            self.send_header("Upgrade", "websocket")
+            self.send_header("Connection", "Upgrade")
+            self.send_header("Sec-WebSocket-Accept", accept)
+            self.end_headers()
+            self.wfile.flush()
+            self.close_connection = True
+            ws = _WebSocket(self.connection, self.rfile)
+            user, can_talk = self.user, app.auth.can(self.user, "talk")
+            state = {"listen": False, "last_audio": 0.0, "holding": False}
+
+            def feed(pcm):
+                if state["listen"]:
+                    ws.send(pcm, binary=True)
+            app.talk.listeners.add(feed)
+
+            def watchdog():
+                # a browser that stops sending audio while holding the floor (crashed, lost Wi-Fi)
+                while ws.open:
+                    if state["holding"] and time.time() - state["last_audio"] > 2.5:
+                        state["holding"] = False
+                        app.talk.release(user, "connection lost")
+                        ws.send_json({"type": "ptt", "on": False, "error": "Audio stopped arriving, so you were taken off air"})
+                    if not ws.ping():
+                        break
+                    time.sleep(0.5)
+            threading.Thread(target=watchdog, daemon=True).start()
+            try:
+                while True:
+                    op, data = ws.recv()
+                    if op is None:
+                        break
+                    if op == 2:
+                        if state["holding"]:
+                            state["last_audio"] = time.time()
+                            app.talk.audio(user, data)
+                        continue
+                    try:
+                        msg = json.loads(data)
+                    except ValueError:
+                        continue
+                    if msg.get("type") == "listen":
+                        state["listen"] = bool(msg.get("on"))
+                    elif msg.get("type") == "ptt":
+                        if msg.get("on"):
+                            if not can_talk:
+                                ws.send_json({"type": "ptt", "on": False, "error": "You don't have permission to talk"})
+                                continue
+                            target = msg.get("target") if isinstance(msg.get("target"), dict) else {"kind": "group"}
+                            if target.get("kind") == "unit" and not self._sees(str(target.get("unit", ""))):
+                                ws.send_json({"type": "ptt", "on": False, "error": "You don't have access to that unit"})
+                                continue
+                            err = app.talk.request(user, target)
+                            if not err:
+                                state["holding"], state["last_audio"] = True, time.time() + 1
+                            ws.send_json({"type": "ptt", "on": not err, "error": err})
+                        else:
+                            if state["holding"]:
+                                state["holding"] = False
+                                app.talk.release(user)
+                            ws.send_json({"type": "ptt", "on": False})
+            except (OSError, ValueError):
+                pass
+            finally:
+                ws.open = False
+                app.talk.listeners.discard(feed)
+                if state["holding"]:
+                    app.talk.release(user, "connection closed")
+
         def _stream(self):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -1036,6 +1136,77 @@ def make_handler(app):
     return Handler
 
 
+class _WebSocket:
+    """Just enough RFC 6455 for the console: one message per frame, ping/pong, close."""
+
+    def __init__(self, sock, rfile):
+        self.sock, self.rfile, self.open = sock, rfile, True
+        self.wlock = threading.Lock()
+        self.last_ping = 0.0
+        sock.settimeout(60)
+
+    def _read(self, n):
+        b = self.rfile.read(n)
+        if len(b) < n:
+            raise OSError("closed")
+        return b
+
+    def recv(self):
+        while self.open:
+            h = self._read(2)
+            op, masked, n = h[0] & 0x0F, h[1] & 0x80, h[1] & 0x7F
+            if n == 126:
+                n = struct.unpack(">H", self._read(2))[0]
+            elif n == 127:
+                n = struct.unpack(">Q", self._read(8))[0]
+            if n > 1 << 20:
+                raise ValueError("frame too big")
+            mask = self._read(4) if masked else b"\0\0\0\0"
+            data = bytearray(self._read(n))
+            for i in range(n):
+                data[i] ^= mask[i & 3]
+            if op == 8:
+                self._frame(8, b"")
+                self.open = False
+                return None, None
+            if op == 9:
+                self._frame(10, bytes(data))
+                continue
+            if op == 10:
+                continue
+            return op, (bytes(data) if op == 2 else data.decode("utf-8", "replace"))
+        return None, None
+
+    def _frame(self, op, payload):
+        n = len(payload)
+        head = bytes([0x80 | op]) + (bytes([n]) if n < 126 else
+                                     bytes([126]) + struct.pack(">H", n) if n < 65536 else bytes([127]) + struct.pack(">Q", n))
+        with self.wlock:
+            self.sock.sendall(head + payload)
+
+    def send(self, payload, binary=False):
+        if not self.open:
+            return False
+        try:
+            self._frame(2 if binary else 1, payload if binary else payload.encode())
+            return True
+        except OSError:
+            self.open = False
+            return False
+
+    def send_json(self, obj):
+        return self.send(json.dumps(obj))
+
+    def ping(self):
+        if time.time() - self.last_ping > 15:
+            self.last_ping = time.time()
+            try:
+                self._frame(9, b"")
+            except OSError:
+                self.open = False
+        return self.open
+
+
 class _Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -1058,9 +1229,70 @@ def _start(app, host, port):
     return srv
 
 
+class _TLSServer(_Server):
+    """HTTPS on the LAN (browsers only allow the microphone on secure pages). The TLS handshake
+    happens in each connection's own thread, so one slow client can't hold up the rest."""
+
+    def __init__(self, addr, handler, ctx):
+        super().__init__(addr, handler)
+        self.ctx = ctx
+
+    def finish_request(self, request, client_address):
+        try:
+            request.settimeout(15)
+            tls = self.ctx.wrap_socket(request, server_side=True)
+            tls.settimeout(None)
+        except (OSError, ssl.SSLError):
+            return
+        self.RequestHandlerClass(tls, client_address, self)
+
+
+def tls_paths(app):
+    d = os.path.join(app.cfg["data_dir"], "tls")
+    return d, os.path.join(d, "cert.pem"), os.path.join(d, "key.pem")
+
+
+def ensure_cert(app):
+    """A self-signed certificate for this box, made once (replace cert.pem/key.pem with your own if you like)."""
+    d, cert, key = tls_paths(app)
+    if os.path.isfile(cert) and os.path.isfile(key):
+        return cert, key
+    os.makedirs(d, exist_ok=True)
+    ips = set()
+    try:
+        ips |= set(subprocess_out(["hostname", "-I"]).split())
+    except OSError:
+        pass
+    san = ",".join([f"DNS:{socket.gethostname()}", "DNS:localhost", "IP:127.0.0.1"] + [f"IP:{i}" for i in sorted(ips) if ":" not in i])
+    r = subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-sha256", "-days", "3650",
+                        "-keyout", key, "-out", cert, "-subj", f"/CN={socket.gethostname()} KenTrackIt",
+                        "-addext", f"subjectAltName={san}"], capture_output=True, text=True, timeout=60)
+    if r.returncode != 0:
+        raise OSError("couldn't make a certificate: " + (r.stderr.strip() or "is openssl installed?"))
+    os.chmod(key, 0o600)
+    return cert, key
+
+
+def subprocess_out(cmd):
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=5).stdout
+
+
 def serve(app):
     srv = _start(app, app.cfg["web"]["host"], app.cfg["web"]["port"])
     app.servers.append(srv)
+    hp = app.cfg["web"].get("https_port") or 0
+    if hp:
+        try:
+            cert, key = ensure_cert(app)
+            ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ctx.load_cert_chain(cert, key)
+            tsrv = _TLSServer((app.cfg["web"]["host"], hp), make_handler(app), ctx)
+            threading.Thread(target=tsrv.serve_forever, daemon=True, name=f"web-tls:{hp}").start()
+            app.tls_server = tsrv
+            log.info("HTTPS on port %s", hp)
+        except (OSError, ssl.SSLError) as e:
+            log.warning("HTTPS not started: %s", e)
+            app.store.add_event("web", f"HTTPS not started: {e}")
     return srv
 
 

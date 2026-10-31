@@ -20,6 +20,7 @@
   $("t-settings").hidden = !can("settings");
   $("t-reports").hidden = !can("reports");
   $("t-channel").hidden = !can("reports");
+  $("t-console").hidden = !can("listen");
   $("d-poll").hidden = !can("poll") || cfg.polling_mode === "off";
   $("d-edit").hidden = !can("units");
   $("p-csv").hidden = !can("export");

@@ -101,6 +101,43 @@ history, alerts, reports and exports (alerts not tied to a unit are shown to eve
   acknowledged alerts.
 - Scripts can use HTTP Basic auth with any account, e.g. `curl -u alex:… http://pi:8090/api/units`.
 
+## Dispatch console (two-way)
+
+The **Dispatch** page (`/console`) lets a dispatcher talk to the fleet from the browser and listen to the
+channel live. Pick the group or a unit, then hold the big button (or **Space**) and speak.
+
+- **One talker at a time.** Other dispatchers see who has the floor.
+- **Busy channel.** Talking over traffic is refused unless allowed in Settings.
+- **Time limit.** Overs are cut off after the limit (60 s by default).
+- **Logged and recorded.** Every over goes in the Channel log as *Dispatch*, with who sent it.
+- **Live listen** uses the voice recording sound card. Calls the NXR makes to KenTrackIt are played on the
+  console as well.
+- **Emergencies** show at the top, with a button to talk straight to that unit.
+- **Permissions.** Administrators and dispatchers can talk. The `talk` permission controls it.
+
+**Talk paths** (Settings → Dispatch console):
+
+| Path | Hardware | Who hears it |
+|---|---|---|
+| **K5TRA** | The monitor radio transmits: K5TRA audio out → radio mic input, K5TRA PTT (GPIO 3) → radio PTT, on the accessory connector | The radio's selected group, or one unit if the *private call dial command* is set |
+| **NXR-1800 SIP** | None: KenTrackIt calls the NXR's SIP interface directly (code shared with AirBridge) | The NXR's configured group |
+| **Test** | None | Nobody; everything else works, for training and testing |
+
+Private calls need the radio to dial the unit before keying. Once we know the NX-3000's serial command
+for that, enter it as the dial command, with `{id}`, `{num}` or `{num5}` like the poll command.
+
+**The microphone needs HTTPS.** Browsers only allow the mic on secure pages:
+
+- **Through the Cloudflare tunnel:** it just works.
+- **On the office network:** set *HTTPS port* under Settings → Web access (e.g. 8443), restart the service,
+  and open `https://<box>:8443/console`. The box makes its own certificate, so accept the browser's warning
+  once per PC. To use your own certificate, replace `/var/lib/radio-avl/tls/cert.pem` and `key.pem`.
+
+Listening works on plain http too.
+
+To test without radios: `python3 tools/fake_nxr.py --port 5070 --out /tmp/nxr` from the AirBridge repo,
+then point the NXR settings at `127.0.0.1:5070`.
+
 ## What's New pop-up
 
 After an update, each user sees a short "What's new" window the first time they open the map, then not
