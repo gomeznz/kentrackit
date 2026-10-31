@@ -54,6 +54,8 @@ added once the poll command has been captured (see *Roadmap*).
 
 ## Install on the Pi
 
+Installing on an Intel NUC or other small PC instead? See [docs/install-nuc.md](docs/install-nuc.md).
+
 ```bash
 ssh pi@<pi-address>
 git clone https://github.com/gomeznz/kentrackit.git && cd kentrackit

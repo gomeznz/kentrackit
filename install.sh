@@ -3,13 +3,13 @@
 set -e
 [ "$(id -u)" = 0 ] || { echo "Run with sudo"; exit 1; }
 
-apt-get install -y python3-serial alsa-utils opus-tools >/dev/null
+apt-get install -y python3 python3-serial alsa-utils opus-tools iproute2 >/dev/null
 
 id radio-avl >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin radio-avl
 usermod -aG dialout,audio radio-avl
 # front-panel LCD on I2C (the group exists once I2C is turned on in raspi-config)
 getent group i2c >/dev/null && usermod -aG i2c radio-avl
-[ -e /dev/i2c-1 ] || echo "Note: I2C is off. For a front-panel LCD: sudo raspi-config -> Interface Options -> I2C, then run this again."
+grep -qi raspberry /proc/device-tree/model 2>/dev/null && [ ! -e /dev/i2c-1 ] && echo "Note: I2C is off. For a front-panel LCD: sudo raspi-config -> Interface Options -> I2C, then run this again."
 
 mkdir -p /opt/radio-avl /etc/radio-avl /var/lib/radio-avl
 rm -rf /opt/radio-avl/radio_avl

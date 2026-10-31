@@ -120,7 +120,7 @@ def scan(bus):
     """Which LCD-backpack addresses answer on this bus? Returns (addresses, error)."""
     path = f"/dev/i2c-{bus}"
     if not os.path.exists(path):
-        return [], f"{path} doesn't exist: turn I2C on with sudo raspi-config (Interface Options → I2C)"
+        return [], _no_bus_hint(bus)
     try:
         fd = os.open(path, os.O_RDWR)
     except OSError as e:
@@ -137,6 +137,18 @@ def scan(bus):
     finally:
         os.close(fd)
     return found, None
+
+
+def _no_bus_hint(bus):
+    try:
+        with open("/proc/device-tree/model") as f:
+            pi = "raspberry" in f.read().lower()
+    except OSError:
+        pi = False
+    if pi:
+        return f"/dev/i2c-{bus} doesn't exist: turn I2C on with sudo raspi-config (Interface Options → I2C)"
+    return (f"/dev/i2c-{bus} doesn't exist. On a PC, plug in a USB-to-I2C adapter (e.g. CP2112) "
+            "and pick its bus here")
 
 
 def buses():
@@ -263,7 +275,7 @@ class FrontPanel:
                 if e.errno in (5, 6, 121):
                     self.error = f"No display answering at 0x{C['address']:02X} on i2c-{C['bus']}: check the wiring and address"
                 elif e.errno == 2:
-                    self.error = f"/dev/i2c-{C['bus']} doesn't exist: turn I2C on with sudo raspi-config (Interface Options → I2C)"
+                    self.error = _no_bus_hint(C["bus"])
                 elif e.errno == 13:
                     self.error = f"Not allowed to use /dev/i2c-{C['bus']}: run sudo ./install.sh again, then restart"
                 else:
