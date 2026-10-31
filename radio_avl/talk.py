@@ -278,7 +278,7 @@ class Talk:
     # ---- status -------------------------------------------------------------------------------
     def state(self):
         p, f = self.path, self.floor
-        return {"enabled": self.cfg["enabled"], "path": self.cfg["path"],
+        return {"t": time.time(), "enabled": self.cfg["enabled"], "path": self.cfg["path"],
                 "ready": bool(p and p.ready), "detail": p.status() if p else "Off",
                 "private": bool(self.cfg["path"] == "k5tra" and self.cfg["private_command"]),
                 "group": self.cfg["group_name"], "max_s": self.cfg["max_talk_s"],
@@ -419,28 +419,36 @@ class Talk:
 
     def run(self):
         while not self.app.stop.is_set():
-            self.restart.clear()
-            c = self.cfg
-            with self.mx:
-                if self.floor:
-                    self.release(reason="settings changed")
-                if self.path:
-                    self.path.close()
-                    self.path = None
-                if c["enabled"]:
-                    try:
-                        self.path = PATHS.get(c["path"], TestPath)(self)
-                    except Exception as e:      # noqa: BLE001
-                        log.warning("talk path: %s", e)
-                        self.path = TestPath(self)
-                        self.path.ready, self.path.error = False, str(e)
-                        self.path.status = lambda: self.path.error
-            self._publish()
-            last_busy = None
-            while not self.restart.is_set() and not self.app.stop.is_set():
-                self.tick()
-                busy = self.app.channel.busy_since is not None
-                if busy != last_busy:
-                    last_busy = busy
-                    self._publish()
-                self.restart.wait(0.25)
+            try:
+                self._run_once()
+            except Exception:       # noqa: BLE001 - never leave the console without a talk thread
+                log.exception("talk thread")
+                self.app.store.add_event("dispatch", "talk path crashed; restarting it")
+                self.restart.wait(3)
+
+    def _run_once(self):
+        self.restart.clear()
+        c = self.cfg
+        with self.mx:
+            if self.floor:
+                self.release(reason="settings changed")
+            if self.path:
+                self.path.close()
+                self.path = None
+            if c["enabled"]:
+                try:
+                    self.path = PATHS.get(c["path"], TestPath)(self)
+                except Exception as e:      # noqa: BLE001
+                    log.warning("talk path: %s", e)
+                    self.path = TestPath(self)
+                    self.path.ready, self.path.error = False, str(e)
+                    self.path.status = lambda: self.path.error
+        self._publish()
+        last_busy = None
+        while not self.restart.is_set() and not self.app.stop.is_set():
+            self.tick()
+            busy = self.app.channel.busy_since is not None
+            if busy != last_busy:
+                last_busy = busy
+                self._publish()
+            self.restart.wait(0.25)

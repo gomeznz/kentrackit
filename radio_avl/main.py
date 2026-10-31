@@ -97,6 +97,7 @@ class App:
                 self.panel.restart.set()
             if new["console"] != old["console"]:
                 self.talk.restart.set()
+                self.talk._publish()
                 if new["console"]["enabled"] != old["console"]["enabled"]:
                     self.voice.restart.set()        # live listen needs the sound card open
             if new["tiles"] != old["tiles"]:

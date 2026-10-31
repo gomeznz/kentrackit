@@ -410,6 +410,7 @@
           return;
         }
         if (section === "map") setTimeout(() => location.reload(), 800);
+        if (section === "console") { loadConsole(); setTimeout(loadConsole, 1200); }
         fillAll();
       } catch (e) {
         toast(e.message, true);

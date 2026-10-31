@@ -259,7 +259,8 @@
   function renderAll() { renderUnits(); renderTarget(); renderPtt(); renderOnair(); renderPath(); renderLink(); renderEmerg(); }
 
   const es = new EventSource("/api/stream");
-  es.addEventListener("talk", (m) => { const d = JSON.parse(m.data); T = Object.assign(T, d); if (!T.private && mode === "unit") mode = "group"; renderAll(); });
+  es.addEventListener("open", async () => { const d = await (await fetch("/api/console")).json(); if (!T.t || d.t >= T.t) { T = Object.assign(T, d); renderAll(); } });
+  es.addEventListener("talk", (m) => { const d = JSON.parse(m.data); if (T.t && d.t && d.t < T.t) return; T = Object.assign(T, d); if (!T.private && mode === "unit") mode = "group"; renderAll(); });
   es.addEventListener("onair", (m) => { onair = JSON.parse(m.data); renderOnair(); renderUnits(); });
   es.addEventListener("link", (m) => { linkUp = JSON.parse(m.data).up; renderLink(); });
   es.addEventListener("unit", (m) => { const u = JSON.parse(m.data); units.set(u.id, u); renderUnits(); });
