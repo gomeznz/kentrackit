@@ -109,6 +109,7 @@
     $("vr-on").checked = R.enabled; $("vr-fmt").value = R.format; $("vr-keep").value = R.keep_days;
     $("vr-rate").value = R.rate; $("vr-br").value = R.bitrate_kbps; $("vr-pre").value = R.preroll_ms;
     $("vr-hang").value = R.hang_ms; $("vr-free").value = R.min_free_mb; $("vr-voiceonly").checked = R.voice_only;
+    $("vr-min").value = R.min_call_s;
     const sel = $("vr-dev"); sel.replaceChildren();
     const opt = (v, t) => { const o = document.createElement("option"); o.value = v; o.textContent = t; sel.appendChild(o); };
     opt("", "– choose –");
@@ -368,7 +369,7 @@
       device: $("vr-dev").value === "__custom" ? $("vr-dev-custom").value.trim() : $("vr-dev").value,
       format: $("vr-fmt").value, keep_days: +$("vr-keep").value, rate: +$("vr-rate").value, bitrate_kbps: +$("vr-br").value,
       preroll_ms: +$("vr-pre").value, hang_ms: +$("vr-hang").value, min_free_mb: +$("vr-free").value,
-      voice_only: $("vr-voiceonly").checked } }),
+      voice_only: $("vr-voiceonly").checked, min_call_s: +$("vr-min").value } }),
     console: () => {
       const c = { enabled: $("cn-on").checked, path: $("cn-path").value, group_name: $("cn-group").value.trim(),
         hid_device: $("cn-hid").value, playback_device: $("cn-play").value, ptt_gpio: +$("cn-gpio").value, ptt_invert: $("cn-inv").checked,

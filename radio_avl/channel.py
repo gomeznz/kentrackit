@@ -155,6 +155,10 @@ class Channel:
             self.app.voice.busy_end(None)
             return
         kind = "data" if cur["data"] and not cur["voice"] else "voice"
+        if kind == "voice" and dur < self.app.cfg["recording"].get("min_call_s", 0):
+            # a key-up blip / kerchunk: not logged, not recorded, not counted
+            self.app.voice.busy_end(None)
+            return
         texts = list(cur["texts"])
         if cur["name"] and cur["name"] not in texts:
             texts.insert(0, cur["name"])

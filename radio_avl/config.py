@@ -41,7 +41,8 @@ DEFAULTS = {
                "emergency_keywords": "emergency, emerg, man down"},
     "reports": {"stop_min": 5, "stop_radius_m": 60},
     "recording": {"enabled": False, "device": "", "rate": 16000, "format": "opus", "bitrate_kbps": 16,
-                  "keep_days": 90, "preroll_ms": 300, "hang_ms": 400, "voice_only": True, "min_free_mb": 1000},
+                  "keep_days": 90, "preroll_ms": 300, "hang_ms": 400, "voice_only": True, "min_free_mb": 1000,
+                  "min_call_s": 1.0},
     "console": {"enabled": False, "path": "test", "group_name": "All units", "max_talk_s": 60,
                 "talk_over_busy": False, "ptt_lead_ms": 300, "ptt_tail_ms": 200,
                 "hid_device": "", "ptt_gpio": 3, "ptt_invert": False, "playback_device": "",
@@ -353,6 +354,8 @@ def apply_patch(cfg, patch):
                                 ("min_free_mb", 100, 100000, "Minimum free disk")):
             if k in rc:
                 R[k] = _num(rc[k], lo, hi, name, True)
+        if "min_call_s" in rc:
+            R["min_call_s"] = round(_num(rc["min_call_s"], 0, 10, "Shortest call to keep"), 1)
         if "voice_only" in rc:
             R["voice_only"] = bool(rc["voice_only"])
         if R["enabled"] and not R["device"]:

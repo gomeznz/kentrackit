@@ -360,6 +360,8 @@ class Talk:
         return self.cfg["group_name"] or "the group"
 
     def _log(self, f, end, reason):
+        if end - f["since"] < self.app.cfg["recording"].get("min_call_s", 0):
+            return                      # an accidental tap of the talk button
         to = self._target_text(f["target"])
         unit = f["target"].get("unit") if f["target"].get("kind") == "unit" else None
         tx = self.app.channel.record(f["since"], end, "dispatch", unit, f"{f['name']} → {to}"[:300],

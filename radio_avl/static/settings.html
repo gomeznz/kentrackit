@@ -260,6 +260,9 @@
       </label>
       <label>Keep recordings for <span class="unit-input"><input id="vr-keep" type="number" min="0" max="3650" required>days (0 = forever)</span></label>
     </div>
+    <label>Ignore voice calls shorter than <span class="unit-input"><input id="vr-min" type="number" min="0" max="10" step="0.1" required>s</span></label>
+    <p class="help">Key-up blips and accidental presses under this length aren't logged, recorded or counted on the
+      leaderboard (dispatcher overs too). 0 keeps everything. Applies even with recording off.</p>
     <details>
       <summary>Advanced</summary>
       <div class="two">
