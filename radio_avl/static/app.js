@@ -534,7 +534,7 @@
       const style = { color: z.colour, weight: 2, opacity: z.active ? .9 : .4, fillOpacity: z.active ? .08 : .03, dashArray: z.active ? null : "4 6" };
       const layer = z.shape === "circle" ? L.circle(z.geometry.center, { radius: z.geometry.radius, ...style })
         : L.polygon(z.geometry.points, style);
-      layer.bindTooltip(z.name, { permanent: true, direction: "center", className: "zone-label" });
+      layer.bindTooltip(document.createTextNode(z.name), { permanent: true, direction: "center", className: "zone-label" });
       layer.on("click", () => { if (tab === "zones" && !drawing && can("zones")) editZone(z); });
       zoneLayer.addLayer(layer);
     }

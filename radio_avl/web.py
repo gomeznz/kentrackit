@@ -22,6 +22,17 @@ from .auth import AuthError, ROLES, REMEMBER_S
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 TILE_RE = re.compile(r"^/tiles/(sat/)?(\d{1,2})/(\d{1,7})/(\d{1,7})$")
+class _SafeCSV:
+    """csv.writer that stops text like =HYPERLINK(...) (a radio name, a zone name) running as a
+    formula when the file is opened in Excel. Numbers are left alone."""
+    def __init__(self, f):
+        self.w = csv.writer(f)
+
+    def writerow(self, row):
+        self.w.writerow(["'" + v if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") else v
+                         for v in row])
+
+
 UNIT_RE = re.compile(r"^/api/units/([A-Za-z0-9_.-]{1,32})$")
 FENCE_RE = re.compile(r"^/api/geofences/(\d{1,9})$")
 ACK_RE = re.compile(r"^/api/alerts/(\d{1,12})/ack$")
@@ -224,12 +235,22 @@ def make_handler(app):
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "KenTrackIt"
+        sys_version = ""          # don't advertise the Python version
         protocol_version = "HTTP/1.1"
 
         def log_message(self, fmt, *args):
             pass
 
         # ---- helpers --------------------------------------------------
+        def end_headers(self):
+            # on every response, including files, tiles and the live stream
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "same-origin")
+            self.send_header("X-Frame-Options", "SAMEORIGIN")
+            self.send_header("Content-Security-Policy",
+                             "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'")
+            super().end_headers()
+
         def _send(self, code, body=b"", ctype="application/json", headers=None):
             if isinstance(body, str):
                 body = body.encode()
@@ -528,7 +549,7 @@ def make_handler(app):
                     return
                 t0, t1 = self._range(qs)
                 rows = app.channel.log(t0, t1, None, None, 100000, self._allowed_units())
-                out = io.StringIO(); w = csv.writer(out)
+                out = io.StringIO(); w = _SafeCSV(out)
                 w.writerow(["start_local", "duration_s", "type", "unit", "display"])
                 for r in reversed(rows):
                     w.writerow([time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(r["start"])), r["duration"],
@@ -691,7 +712,10 @@ def make_handler(app):
                     return
                 if not self._sees(m.group(1)):
                     return self._json({"error": "You don't have access to that unit"}, 403)
-                u = app.store.set_unit(m.group(1), body.get("alias"), body.get("colour"), body.get("notes"))
+                colour = body.get("colour")
+                if colour is not None and colour != "" and not HEX_RE.match(str(colour)):
+                    return self._json({"error": "Colour must look like #2563eb"}, 400)
+                u = app.store.set_unit(m.group(1), body.get("alias"), colour, body.get("notes"))
                 app.auth.audit(self.user, f"updated unit {m.group(1)} (name '{u['alias']}')")
                 app.broker.publish("unit", u)
                 return self._json(u)
@@ -842,7 +866,7 @@ def make_handler(app):
             t0, t1 = self._range(qs)
             rep = reports.fleet_report(app.store, t0, t1, app.cfg, None, self._allowed_units())
             out = io.StringIO()
-            w = csv.writer(out)
+            w = _SafeCSV(out)
             loc = lambda t: time.strftime("%Y-%m-%d %H:%M", time.localtime(t)) if t else ""
             hm = lambda s: f"{int(s // 3600)}:{int(s % 3600 // 60):02d}"
             w.writerow(["unit", "name", "first_report", "last_report", "distance_km", "moving_h:mm",
@@ -909,7 +933,7 @@ def make_handler(app):
             t0, t1 = self._range(qs)
             rows = [r for r in app.store.positions_for_export(unit, t0, t1) if self._sees(r["unit_id"])]
             out = io.StringIO()
-            w = csv.writer(out)
+            w = _SafeCSV(out)
             w.writerow(["unit", "received_utc", "gps_time_utc", "lat", "lon",
                         "speed_kmh", "course", "valid", "raw"])
             iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else ""

@@ -82,7 +82,7 @@
       for (const z of zones.filter((z) => z.active)) {
         const st = { color: z.colour, weight: 1.5, fillOpacity: .06 };
         (z.shape === "circle" ? L.circle(z.geometry.center, { radius: z.geometry.radius, ...st }) : L.polygon(z.geometry.points, st))
-          .bindTooltip(z.name, { permanent: true, direction: "center", className: "zone-label" }).addTo(map);
+          .bindTooltip(document.createTextNode(z.name), { permanent: true, direction: "center", className: "zone-label" }).addTo(map);
       }
     }
     mapLayers.clearLayers();
@@ -95,7 +95,7 @@
       L.circleMarker(last, { radius: 6, color: "#fff", weight: 2, fillColor: "#dc2626", fillOpacity: 1 }).bindTooltip("End " + tm(last[2])).addTo(mapLayers);
     }
     r.stops.forEach((s, i) => L.marker([s.lat, s.lon], { icon: L.divIcon({ className: "stop-marker", html: String(i + 1) }) })
-      .bindTooltip(`Stop ${i + 1}: ${tm(s.start)}–${tm(s.end)} (${hm(s.duration_s)})${s.zone ? " · " + s.zone : ""}`).addTo(mapLayers));
+      .bindTooltip(document.createTextNode(`Stop ${i + 1}: ${tm(s.start)}–${tm(s.end)} (${hm(s.duration_s)})${s.zone ? " · " + s.zone : ""}`)).addTo(mapLayers));
     setTimeout(() => map.invalidateSize(), 50);
 
     const items = [...r.stops.map((s, i) => ({ ...s, kind: "stop", n: i + 1 })), ...r.trips.map((t) => ({ ...t, kind: "trip" }))]
