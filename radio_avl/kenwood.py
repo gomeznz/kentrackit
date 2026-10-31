@@ -134,6 +134,18 @@ def decode(frame: bytes) -> dict:
         out = parse_sentence(body.decode("ascii", "replace").strip())
     elif len(body) == 2 and body[:1] == b"S" and body[1:2] in (b"0", b"1"):
         out = {"kind": "busy", "busy": body[1:2] == b"1"}
+    elif len(body) == 2 and body[:1] == b"T" and body[1:2] in (b"0", b"1"):
+        # voice call on the channel the monitor radio is listening to (it unmutes): T1 start, T0 end
+        out = {"kind": "voice", "on": body[1:2] == b"1"}
+    elif body.startswith(b"gI") and len(body) >= 9:
+        # caller ID: gI1<caller><other> at the start of a call, gI0... at the end, IDs like U00110
+        ids = re.findall(r"[A-Z]\d{5}", body[3:].decode("latin-1"))
+        out = {"kind": "caller", "active": body[2:3] == b"1", "unit": ids[0] if ids else "",
+               "other": ids[1] if len(ids) > 1 else "", "raw": body.decode("latin-1")}
+    elif body.startswith(b"gV") and len(body) >= 8:
+        # the caller's name as programmed in the radio: gVU00110MORRIS + space padding
+        txt = body[2:].decode("latin-1")
+        out = {"kind": "caller_name", "unit": txt[:6], "name": txt[6:].strip()}
     elif body.startswith(b"JA"):
         out = {"kind": "status", "flags": body[2:].hex()}
     elif body.startswith(b"JE"):

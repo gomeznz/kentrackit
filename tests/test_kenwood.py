@@ -73,3 +73,14 @@ if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
             fn(); print("ok", name)
+
+
+def test_caller_id_frames():
+    # captured from a real NX-3000 call, Oct 2026
+    from radio_avl.kenwood import decode
+    assert decode(bytes.fromhex("5431") + b"07") == {"kind": "voice", "on": True, "seq": 7}
+    d = decode(b"gI1U00110U00110" + b"08")
+    assert d["kind"] == "caller" and d["active"] and d["unit"] == "U00110"
+    d = decode(bytes.fromhex("67565530303131304d4f525249532020202020202020") + b"09")
+    assert d == {"kind": "caller_name", "unit": "U00110", "name": "MORRIS", "seq": 9}
+    assert decode(b"T0" + b"10")["on"] is False

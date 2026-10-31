@@ -119,6 +119,8 @@ class App:
                 return
             rx_time = self._discipline_clock(d, rx_time)
             unit = self.store.add_position(d, rx_time)
+            if unit and not unit["alias"] and self.channel.radio_names.get(d["unit"]):
+                unit = self.store.set_unit(d["unit"], alias=self.channel.radio_names[d["unit"]])
             self.stats["positions"] += 1
             zones = self.alerts.on_position(d, unit, rx_time)
             self.channel.on_position(d["unit"], rx_time)
@@ -145,6 +147,14 @@ class App:
                 self.store.add_event("display", d["message"], None, rx_time)
             self.alerts.on_display(d, rx_time)
             self.channel.on_display(d["fields"], d["message"], rx_time)
+        elif kind == "voice":
+            self.channel.on_voice(d["on"], rx_time)
+        elif kind == "caller":
+            if d["unit"]:
+                self.channel.on_caller(d["unit"], rx_time, active=d["active"], other=d["other"])
+        elif kind == "caller_name":
+            if d["unit"]:
+                self.channel.on_caller(d["unit"], rx_time, name=d["name"])
         elif kind == "status":
             self.broker.publish("status", {"flags": d["flags"]}, sticky=True)
         elif kind in ("sentence", "unknown"):

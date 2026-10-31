@@ -746,7 +746,7 @@
       clearInterval(onairTick);
       const disp = $("display");
       if (onair.busy) {
-        const who = onair.unit && units.has(onair.unit) ? label(units.get(onair.unit).data) : "";
+        const who = onair.unit && units.has(onair.unit) ? label(units.get(onair.unit).data) : (onair.name || onair.unit || "");
         const upd = () => { disp.textContent = `● ON AIR${who ? " · " + who : ""}${onair.kind === "data" ? " (data)" : ""} · ${Math.max(0, Math.round(now() - onair.since))} s`; };
         disp.classList.add("onair"); upd(); onairTick = setInterval(upd, 1000);
       } else disp.classList.remove("onair");

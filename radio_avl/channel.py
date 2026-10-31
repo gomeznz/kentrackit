@@ -2,6 +2,9 @@
 Channel activity: every transmission the monitor radio hears (busy S1 .. clear S0) is logged with
 its duration, whether it was data or voice, and which unit it was if we can tell.
 
+Voice calls the radio unmutes for arrive as T1 .. T0, with the caller ID (gI1<id>) and the caller's
+programmed name (gV<id><name>). These count as busy too, in case S1/S0 doesn't come with them.
+
 This is the base for the channel-load page, the "on air" display and, later, dispatcher logging.
 """
 import json
@@ -45,6 +48,9 @@ class Channel:
         self.cur = None
         self.stuck_alerted = False
         self.idle_fields = set()    # what the display shows when nobody's talking (channel, zone)
+        self.carrier = False        # S1 .. S0
+        self.voice_on = False       # T1 .. T0
+        self.radio_names = {}       # unit ID -> name programmed in that radio (from caller ID)
 
     @property
     def busy(self):
@@ -53,18 +59,52 @@ class Channel:
     # ---- events from the radio --------------------------------------------
     def on_busy(self, busy, t):
         with self.mx:
-            if busy and self.busy_since is None:
-                self.busy_since = t
-                self.cur = {"data": False, "unit": None, "texts": []}
-                self.stuck_alerted = False
-                self.app.voice.busy_start(t)
-                self.app.broker.publish("onair", {"busy": True, "since": t, "unit": None, "kind": None}, sticky=True)
-            elif not busy and self.busy_since is not None:
-                self._finish(t)
+            self.carrier = busy
+            self._update(t)
+
+    def on_voice(self, on, t):
+        with self.mx:
+            self.voice_on = on
+            self._update(t)
+            if on and self.cur is not None:
+                self.cur["voice"] = True
+
+    def _update(self, t):
+        busy = self.carrier or self.voice_on
+        if busy and self.busy_since is None:
+            self.busy_since = t
+            self.cur = {"data": False, "voice": False, "unit": None, "caller": False, "name": "", "texts": []}
+            self.stuck_alerted = False
+            self.app.voice.busy_start(t)
+            self.app.broker.publish("onair", {"busy": True, "since": t, "unit": None, "kind": None}, sticky=True)
+        elif not busy and self.busy_since is not None:
+            self._finish(t)
+
+    def on_caller(self, unit_id, t, active=True, other="", name=None):
+        """Caller ID from the radio: authoritative, so it wins over a guess from the display text."""
+        with self.mx:
+            if name:
+                self.radio_names[unit_id] = name
+                u = self.app.store.unit(unit_id)
+                if u is not None and not u["alias"]:
+                    self.app.store.set_unit(unit_id, alias=name)
+                    self.app.broker.publish("unit", self.app.store.unit(unit_id))
+            if self.cur is None:
+                return
+            if not active and self.cur["unit"] == unit_id:
+                return
+            changed = self.cur["unit"] != unit_id or (name and self.cur["name"] != name)
+            self.cur.update(unit=unit_id, caller=True, voice=True, data=False)
+            if name:
+                self.cur["name"] = name
+            if other and other != unit_id:
+                self.cur["to"] = other
+            if changed:
+                self._publish_live()
 
     def on_position(self, unit_id, t):
         with self.mx:
-            if self.cur is not None:
+            if self.cur is not None and not self.cur["caller"]:
                 changed = self.cur["unit"] != unit_id or not self.cur["data"]
                 self.cur["data"], self.cur["unit"] = True, unit_id
                 if changed:
@@ -85,7 +125,7 @@ class Channel:
             text = " ".join(f for f in fields if f and f not in self.idle_fields)
             if text and text not in self.cur["texts"]:
                 self.cur["texts"].append(text)
-            if not self.cur["unit"]:
+            if not self.cur["unit"] and not self.cur["caller"]:
                 u = self.app.alerts.find_unit_in_text(text)
                 if u:
                     self.cur["unit"] = u["id"]
@@ -102,6 +142,7 @@ class Channel:
 
     def _publish_live(self):
         self.app.broker.publish("onair", {"busy": True, "since": self.busy_since, "unit": self.cur["unit"],
+                                          "name": self.cur.get("name", ""),
                                           "kind": "data" if self.cur["data"] else None}, sticky=True)
 
     def _finish(self, t):
@@ -112,8 +153,12 @@ class Channel:
         if dur < 0.05:
             self.app.voice.busy_end(None)
             return
-        kind = "data" if cur["data"] else "voice"
-        tx = self.record(start, t, kind, cur["unit"], " / ".join(cur["texts"])[:300])
+        kind = "data" if cur["data"] and not cur["voice"] else "voice"
+        texts = list(cur["texts"])
+        if cur["name"] and cur["name"] not in texts:
+            texts.insert(0, cur["name"])
+        detail = {"caller_id": True, "to": cur["to"]} if cur.get("to") else ({"caller_id": True} if cur["caller"] else None)
+        tx = self.record(start, t, kind, cur["unit"], " / ".join(texts)[:300], detail)
         self.app.voice.busy_end(tx)
 
     def record(self, start, end, kind, unit_id=None, display="", detail=None):
