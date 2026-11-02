@@ -84,12 +84,15 @@ class Channel:
     def on_caller(self, unit_id, t, active=True, other="", name=None):
         """Caller ID from the radio: authoritative, so it wins over a guess from the display text."""
         with self.mx:
+            u = self.app.store.touch_call(unit_id, t)
             if name:
                 self.radio_names[unit_id] = name
-                u = self.app.store.unit(unit_id)
-                if u is not None and not u["alias"]:
-                    self.app.store.set_unit(unit_id, alias=name)
-                    self.app.broker.publish("unit", self.app.store.unit(unit_id))
+                if not u["alias"]:
+                    u = self.app.store.set_unit(unit_id, alias=name)
+            self._touched = getattr(self, "_touched", {})
+            if name or t - self._touched.get(unit_id, 0) > 5:      # don't flood: gV repeats every second
+                self._touched[unit_id] = t
+                self.app.broker.publish("unit", u)
             if self.cur is None:
                 return
             if not active and self.cur["unit"] == unit_id:
@@ -111,8 +114,10 @@ class Channel:
                 if changed:
                     self._publish_live()
 
-    def on_display(self, fields, message, t):
+    def on_display(self, fields, message, t, line="0"):
         with self.mx:
+            if line != "0" or "Caller ID" in fields:
+                return          # a pop-up (Status, Emergency) or the caller's name: not the idle screen
             if not message or message in DATA_MESSAGES:
                 # the radio's normal display (channel, zone) is everything except a pop-up message
                 self.idle_fields = {f for f in fields if f and f != message}

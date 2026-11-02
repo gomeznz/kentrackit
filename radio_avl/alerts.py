@@ -14,7 +14,8 @@ log = logging.getLogger("radio-avl")
 
 EXIT_BUFFER_M = 25          # GPS wanders ~30 m; must be this far outside to count as leaving
 SEVERITY = {"emergency": "critical", "test": "critical", "status": "warn", "overdue": "warn",
-            "speed": "warn", "enter": "info", "exit": "info", "channel": "warn", "poll": "warn"}
+            "speed": "warn", "enter": "info", "exit": "info", "channel": "warn", "poll": "warn",
+            "reset": "info"}
 
 
 class AlertEngine:
@@ -50,6 +51,45 @@ class AlertEngine:
         if ids:
             self.app.broker.publish("alert_ack", {"ids": ids, "note": note})
 
+    # ---- emergencies ----------------------------------------------------------
+    def emergency(self, unit_id, t, how):
+        """One open emergency per unit, however many ways the radio tells us (status 224, the GPS
+        report's status field, the "Emergency" pop-up). Returns the alert, or None if already open."""
+        with self.lock:
+            for a in self.app.store.alerts(open_only=True, limit=200):
+                if a["kind"] == "emergency" and not a["ack_time"] and t - a["t"] < 600 and \
+                        (a["unit_id"] == unit_id or not (a["unit_id"] and unit_id)):
+                    return None
+            u = unit_id and self.app.store.unit(unit_id)
+            name = (u and u["alias"]) or self.app.channel.radio_names.get(unit_id or "") or unit_id or "Unknown unit"
+            st = self._st(unit_id) if unit_id else {}
+            if unit_id:
+                st["emergency"] = True
+                self._save(unit_id)
+            return self.raise_alert("emergency", f"EMERGENCY from {name} ({how})", unit_id, t,
+                                    u and u["last_lat"], u and u["last_lon"])
+
+    def on_status(self, unit_id, code, t, how):
+        """A status code from a unit (a gE status message or the status field of its GPS report)."""
+        cfg = self.app.cfg["alerts"]
+        if not unit_id or not code:
+            return
+        if code == cfg["emergency_status"]:
+            self.emergency(unit_id, t, how)
+        elif code == cfg["normal_status"]:
+            with self.lock:
+                st = self._st(unit_id)
+                if st.get("emergency"):
+                    st["emergency"] = False
+                    self._save(unit_id)
+                    u = self.app.store.unit(unit_id)
+                    name = (u and u["alias"]) or unit_id
+                    # the dispatcher still acknowledges the emergency; this just says the radio was reset
+                    self.raise_alert("reset", f"{name} reset the emergency at the radio", unit_id, t,
+                                     u and u["last_lat"], u and u["last_lon"])
+        else:
+            self.app.store.add_event("status", f"status {code}", unit_id, t)
+
     # ---- triggers ----------------------------------------------------------
     def on_position(self, d, unit_row, t):
         cfg = self.app.cfg["alerts"]
@@ -66,8 +106,10 @@ class AlertEngine:
 
             # Status/unknown fields in the GPS sentence. Their meaning isn't known yet, so any
             # change is surfaced (a status message or emergency may well show up here).
-            extra = d.get("extra") or {}
+            extra = {k: v for k, v in (d.get("extra") or {}).items() if k != "f13"}   # f13 = status, handled below
             prev = st.get("extra")
+            if prev is not None:
+                prev = {k: v for k, v in prev.items() if k != "f13"}
             if cfg["status_watch"] and prev is not None and extra != prev:
                 diffs = [f"{k}: {prev.get(k, '')!s} → {v!s}" for k, v in extra.items() if prev.get(k) != v]
                 if diffs:
@@ -107,6 +149,8 @@ class AlertEngine:
 
             if changed:
                 self._save(uid)
+        if d.get("status"):
+            self.on_status(uid, d["status"], t, "status in its position report")
         return {"fences": self.state.get(uid, {}).get("fences", [])}
 
     def on_display(self, d, t):
@@ -120,9 +164,8 @@ class AlertEngine:
         if text == last_text and t - last_t < 60:
             return
         self.last_display_alert = (text, t)
-        u = self.find_unit_in_text(text)
-        self.raise_alert("emergency", f"Radio display: {text}", u and u["id"], t,
-                         u and u["last_lat"], u and u["last_lon"])
+        u = self.find_unit_in_text(" ".join(x for x in d["fields"] if x and x.lower() not in kws))
+        self.emergency(u and u["id"], t, f'radio display "{text}"')
 
     def find_unit_in_text(self, text):
         """Which unit does some display text mention? e.g. "EMERGENCY U00113", "113" or "Truck 4"."""

@@ -31,7 +31,7 @@ from .web import Broker, TileCache, serve, rebind
 log = logging.getLogger("radio-avl")
 
 class App:
-    VERSION = "0.8"
+    VERSION = "0.9"
 
     def __init__(self, cfg, config_path=None, mode="serial"):
         self.cfg = cfg
@@ -159,8 +159,10 @@ class App:
             if d["message"] and d["message"] not in ("Receive Data", "Complete") \
                     and not (self.channel.busy and self.alerts.find_unit_in_text(d["message"])):
                 self.store.add_event("display", d["message"], None, rx_time)
+            if d.get("line") == "1":            # a pop-up: "Emergency / Scott", "Status / 207 / Unit ID 25"
+                self.store.add_event("display", " · ".join(x for x in d["fields"] if x), None, rx_time)
             self.alerts.on_display(d, rx_time)
-            self.channel.on_display(d["fields"], d["message"], rx_time)
+            self.channel.on_display(d["fields"], d["message"], rx_time, d.get("line", "0"))
         elif kind == "voice":
             self.channel.on_voice(d["on"], rx_time)
         elif kind == "caller":
@@ -169,6 +171,12 @@ class App:
         elif kind == "caller_name":
             if d["unit"]:
                 self.channel.on_caller(d["unit"], rx_time, name=d["name"])
+        elif kind == "status_msg":
+            if d["unit"]:
+                u = self.store.touch_call(d["unit"], rx_time)
+                self.broker.publish("unit", u)
+                self.store.add_event("status", f"status {d['code']} to {d['to'] or '?'}", d["unit"], rx_time)
+                self.alerts.on_status(d["unit"], d["code"], rx_time, f"status {d['code']}")
         elif kind == "status":
             self.broker.publish("status", {"flags": d["flags"]}, sticky=True)
         elif kind in ("sentence", "unknown"):

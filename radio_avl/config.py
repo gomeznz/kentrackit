@@ -38,7 +38,8 @@ DEFAULTS = {
     "map": {"center": [-46.413, 168.353], "zoom": 12},
     "display": {"stale_after_s": 60, "lost_after_s": 900, "speed_units": "kmh", "trail_min": 30},
     "alerts": {"overdue_min": 10, "speed_limit_kmh": 0, "status_watch": True,
-               "emergency_keywords": "emergency, emerg, man down"},
+               "emergency_keywords": "emergency, emerg, man down",
+               "emergency_status": "224", "normal_status": "207"},
     "reports": {"stop_min": 5, "stop_radius_m": 60},
     "recording": {"enabled": False, "device": "", "rate": 16000, "format": "opus", "bitrate_kbps": 16,
                   "keep_days": 90, "preroll_ms": 300, "hang_ms": 400, "voice_only": True, "min_free_mb": 1000,
@@ -320,6 +321,12 @@ def apply_patch(cfg, patch):
             new["alerts"]["speed_limit_kmh"] = _num(a["speed_limit_kmh"], 0, 300, "Speed limit", True)
         if "status_watch" in a:
             new["alerts"]["status_watch"] = bool(a["status_watch"])
+        for k in ("emergency_status", "normal_status"):
+            if k in a:
+                v = str(a[k]).strip()
+                if v and not re.fullmatch(r"\d{1,4}", v):
+                    raise Invalid("Status codes are numbers, e.g. 224")
+                new["alerts"][k] = v
         if "emergency_keywords" in a:
             new["alerts"]["emergency_keywords"] = str(a["emergency_keywords"])[:300]
 

@@ -234,6 +234,7 @@
     $("al-overdue").value = S.alerts.overdue_min;
     $("al-speed").value = S.alerts.speed_limit_kmh;
     $("al-keywords").value = S.alerts.emergency_keywords;
+    $("al-emst").value = S.alerts.emergency_status; $("al-nost").value = S.alerts.normal_status;
     $("al-status").checked = !!S.alerts.status_watch;
     $("rp-stopmin").value = S.reports.stop_min;
     $("rp-radius").value = S.reports.stop_radius_m;
@@ -389,7 +390,8 @@
       emergency_s: +$("pl-emerg").value, timeout_s: +$("pl-timeout").value, guard_s: +$("pl-guard").value,
       max_per_min: +$("pl-max").value } }),
     alerts: () => ({ alerts: { overdue_min: +$("al-overdue").value, speed_limit_kmh: +$("al-speed").value,
-      emergency_keywords: $("al-keywords").value, status_watch: $("al-status").checked } }),
+      emergency_keywords: $("al-keywords").value, status_watch: $("al-status").checked,
+      emergency_status: $("al-emst").value.trim(), normal_status: $("al-nost").value.trim() } }),
     reports: () => ({ reports: { stop_min: +$("rp-stopmin").value, stop_radius_m: +$("rp-radius").value } }),
     data: () => ({ keep_days: +$("keep-days").value, drop_bad_checksum: $("drop-bad").checked }),
   };

@@ -208,8 +208,15 @@
       <input id="al-keywords" placeholder="emergency, emerg, man down">
     </label>
     <p class="help">If the monitor radio's display shows any of these (comma-separated, any case),
-      KenTrackIt raises an emergency: red banner and alarm until acknowledged. We still need a capture
-      of a real emergency to confirm what the radio shows.</p>
+      KenTrackIt raises an emergency: red banner and alarm until acknowledged.</p>
+    <div class="two">
+      <label>Emergency status code <input id="al-emst" inputmode="numeric" placeholder="224"></label>
+      <label>Normal status code <input id="al-nost" inputmode="numeric" placeholder="207"></label>
+    </div>
+    <p class="help">NX radios send a status code with each emergency and position report. In the 2 Nov 2026 test,
+      the emergency button sent 224 and resetting the radio sent 207. An emergency raises one alert per unit,
+      at its last position. When the radio is reset, an "emergency reset" note is added, but the
+      emergency stays open until a dispatcher acknowledges it.</p>
     <label class="check"><input type="checkbox" id="al-status">
       Alert when the unknown fields in a unit's GPS report change (helps identify status messages)</label>
     <div class="actions">

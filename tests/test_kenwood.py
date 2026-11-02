@@ -84,3 +84,14 @@ def test_caller_id_frames():
     d = decode(bytes.fromhex("67565530303131304d4f525249532020202020202020") + b"09")
     assert d == {"kind": "caller_name", "unit": "U00110", "name": "MORRIS", "seq": 9}
     assert decode(b"T0" + b"10")["on"] is False
+
+
+def test_status_message_and_popup():
+    # captured from a real NX-3000 emergency, 2 Nov 2026
+    from radio_avl.kenwood import decode
+    d = decode(b"gEU00113U00100224" + b"06")
+    assert d["kind"] == "status_msg" and d["unit"] == "U00113" and d["to"] == "U00100" and d["code"] == "224"
+    d = decode(b"JE1Emergency\x00\x00Scott\x00\x00\x00\x00\x00\x00\x00\x00" + b"11")
+    assert d["kind"] == "display" and d["line"] == "1" and d["fields"] == ["Emergency", "Scott"]
+    d = decode(b"$PKNDS,001804,A,4624.6105,S,16820.7684,E,000.0,000.0,021126,22.70,W00,U00113,224,00,*00" + b"07")
+    assert d["status"] == "224"

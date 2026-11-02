@@ -37,10 +37,11 @@
       if (u.id === selected) b.classList.add("sel");
       if (onair.busy && onair.unit === u.id) b.classList.add("talking");
       if (em.has(u.id)) b.classList.add("emerg-u");
-      if (!u.last_seen || now() - u.last_seen > lost) b.classList.add("stale");
+      if (now() - Math.max(u.last_seen || 0, u.last_call || 0) > lost) b.classList.add("stale");
       const dot = el("span", "dot"); dot.style.background = colour(u);
       const mid = el("div"); mid.append(el("div", "nm", label(u)), el("div", "id", u.id));
-      b.append(dot, mid, el("span", "ago", em.has(u.id) ? "🚨" : ago(u.last_seen)));
+      const heard = Math.max(u.last_seen || 0, u.last_call || 0) || null;
+      b.append(dot, mid, el("span", "ago", em.has(u.id) ? "🚨" : (u.last_seen ? "" : "📞 ") + ago(heard)));
       b.onclick = () => { selected = u.id; if (!T.private) mode = "group"; renderAll(); };
       b.ondblclick = () => { selected = u.id; if (T.private) setMode("unit"); };
       li.appendChild(b); ul.appendChild(li);

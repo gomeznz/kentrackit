@@ -49,7 +49,9 @@
     let h = 0; for (const c of u.id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
     return PALETTE[h % PALETTE.length];
   };
+  const callOnly = (u) => !u.last_seen && !!u.last_call;        // heard by caller ID, never sent GPS
   const state = (u) => {
+    if (callOnly(u)) return now() - u.last_call < cfg.lost_after_s ? "voice" : "lost";
     if (!u.last_seen) return "lost";
     const age = now() - u.last_seen;
     return age < cfg.stale_after_s ? "live" : age < cfg.lost_after_s ? "stale" : "lost";
@@ -223,14 +225,15 @@
       const mid = el("div");
       const parts = [];
       if (u.alias) parts.push("ID " + u.id);
-      parts.push(u.last_valid ? speed(u.last_speed_kn) : "no GPS fix");
+      parts.push(callOnly(u) ? "no GPS · calls only" : u.last_valid ? speed(u.last_speed_kn) : "no GPS fix");
       const zn = zoneNames(e.zones); if (zn.length) parts.push(zn.join(", "));
       mid.append(el("div", "name", label(u)), el("div", "sub", parts.join(" · ")));
-      li.append(dot, mid, el("div", "age", ago(u.last_seen)));
+      const heard = Math.max(u.last_seen || 0, u.last_call || 0) || null;
+      li.append(dot, mid, el("div", "age", (callOnly(u) ? "📞 " : "") + ago(heard)));
       li.onclick = () => select(u.id, true);
       ul.appendChild(li);
     }
-    const live = [...units.values()].filter((e) => state(e.data) === "live").length;
+    const live = [...units.values()].filter((e) => state(e.data) === "live" || state(e.data) === "voice").length;
     $("unit-count").textContent = `${live}/${units.size}`;
     $("w-stats").textContent = `${live} live of ${units.size}` + (openAlerts().length ? ` · ${openAlerts().length} alert${openAlerts().length > 1 ? "s" : ""}` : "");
   }
@@ -278,7 +281,9 @@
     const u = e.data;
     $("d-name").textContent = label(u);
     $("d-id").textContent = u.id;
-    $("d-seen").textContent = u.last_seen ? `${ago(u.last_seen)} (${stamp(u.last_seen)})` : "never";
+    $("d-seen").textContent = u.last_seen ? `${ago(u.last_seen)} (${stamp(u.last_seen)})` : "never: this radio hasn't sent GPS";
+    $("d-follow").hidden = u.last_lat == null;
+    $("d-call").textContent = u.last_call ? `${ago(u.last_call)} (${stamp(u.last_call)})` : "–";
     $("d-motion").textContent = u.last_lat != null
       ? `${speed(u.last_speed_kn)} · ${u.last_course != null ? Math.round(u.last_course) + "°" : "–"}`
         + (u.last_valid ? "" : " (last report had no fix)") : "–";

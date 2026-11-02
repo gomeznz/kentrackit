@@ -254,6 +254,8 @@ Each frame is `STX` + payload + a 2-digit counter (00–99) + `ETX`.
 | `JE0` + NUL-separated text | Display text: channel, ?, zone, pop-up message |
 | `T1` / `T0` | Voice call start / end (the monitor radio unmutes) |
 | `gI1<id><id>` / `gI0…` | Caller ID at the start / end of a call, e.g. `gI1U00110U00110` |
+| `gE<from><to><status>` | Status message, e.g. `gEU00113U00100224`: U00113 sent status **224 = emergency** to U00100 (the dispatch/KAS ID). **207** is the normal status, sent when the radio is reset. The same code is field 13 of every `$PKNDS` |
+| `JE1<title>\0…` | A pop-up on the radio's screen: `Emergency / Scott`, `Status / 207 / Unit ID 25` |
 | `gV<id><name>` | The caller's name as programmed in their radio, e.g. `gVU00110MORRIS` (space padded). Used as the unit's name if you haven't named it |
 | `$PKNDS,...` | GPS report: time, fix, lat/lon, speed (kn), course, date, ?, ?, unit ID, ?, ? |
 

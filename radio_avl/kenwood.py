@@ -115,6 +115,7 @@ def parse_sentence(s: str):
             "speed_kn": _float(f[7]),
             "course": _float(f[8]),
             "fix_time": _utc(f[1], f[9]),
+            "status": f[13] if len(f) > 13 else "",       # unit status code (207 normal, 224 emergency)
             "extra": {"f10": f[10], "f11": f[11],
                       "f13": f[13] if len(f) > 13 else "",
                       "f14": f[14] if len(f) > 14 else ""},
@@ -142,6 +143,13 @@ def decode(frame: bytes) -> dict:
         ids = re.findall(r"[A-Z]\d{5}", body[3:].decode("latin-1"))
         out = {"kind": "caller", "active": body[2:3] == b"1", "unit": ids[0] if ids else "",
                "other": ids[1] if len(ids) > 1 else "", "raw": body.decode("latin-1")}
+    elif body.startswith(b"gE") and len(body) >= 14:
+        # status message: gE<from><to><status>, e.g. gEU00113U00100224 = U00113 sent status 224
+        # (emergency) to U00100 (the dispatch / KAS ID); 207 is the normal status
+        txt = body[2:].decode("latin-1")
+        ids = re.findall(r"[A-Z]\d{5}", txt[:12])
+        out = {"kind": "status_msg", "unit": ids[0] if ids else "", "to": ids[1] if len(ids) > 1 else "",
+               "code": txt[12:].strip(), "raw": body.decode("latin-1")}
     elif body.startswith(b"gV") and len(body) >= 8:
         # the caller's name as programmed in the radio: gVU00110MORRIS + space padding
         txt = body[2:].decode("latin-1")

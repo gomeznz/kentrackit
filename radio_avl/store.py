@@ -71,7 +71,7 @@ CREATE INDEX IF NOT EXISTS ix_alert_open ON alerts(ack_time);
 ALERT_COLS = "id, t, kind, severity, unit_id, geofence_id, detail, lat, lon, ack_time, ack_note"
 
 UNIT_COLS = ("id, alias, colour, notes, first_seen, last_seen, last_lat, last_lon, "
-             "last_speed_kn, last_course, last_fix_time, last_valid, reports")
+             "last_speed_kn, last_course, last_fix_time, last_valid, reports, last_call")
 
 
 class Store:
@@ -84,6 +84,8 @@ class Store:
             cols = {r[1] for r in self.db.execute("PRAGMA table_info(units)")}
             if "state" not in cols:           # added in v0.3: alert engine state per unit
                 self.db.execute("ALTER TABLE units ADD COLUMN state TEXT DEFAULT '{}'")
+            if "last_call" not in cols:       # v0.9: units heard by caller ID (some never send GPS)
+                self.db.execute("ALTER TABLE units ADD COLUMN last_call REAL")
 
     # ---- writes -------------------------------------------------------
     def add_position(self, p, rx_time):
@@ -117,6 +119,13 @@ class Store:
                 if val is not None:
                     self.db.execute(f"UPDATE units SET {col}=? WHERE id=?",
                                     (str(val)[:200], unit_id))
+        return self.unit(unit_id)
+
+    def touch_call(self, unit_id, t):
+        """A unit was heard on a call (caller ID). Adds it if it's new: some units never send GPS."""
+        with self.lock, self.db:
+            self.db.execute("INSERT INTO units (id, first_seen) VALUES (?, ?) ON CONFLICT(id) DO NOTHING", (unit_id, t))
+            self.db.execute("UPDATE units SET last_call=? WHERE id=?", (t, unit_id))
         return self.unit(unit_id)
 
     def add_event(self, kind, detail, unit_id=None, rx_time=None):
