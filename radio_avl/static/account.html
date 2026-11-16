@@ -44,6 +44,14 @@
     <div class="actions"><button type="button" id="pa-settings" class="primary">Phone settings</button></div>
   </section>
 
+  <section class="card" id="get-app" hidden>
+    <h2>KenTrackIt for Android</h2>
+    <p class="help">The phone app sounds an alarm for emergencies even while it's closed, can put this phone on the
+      map and works with a radio's PTT key. <span id="ga-ver"></span></p>
+    <div class="actions"><a class="btn primary" href="/app/kentrackit.apk" download>Download the app</a></div>
+    <p class="help">Open the downloaded file to install it. Android may ask you to allow installs from your browser first.</p>
+  </section>
+
   <form class="card" id="pw">
     <h2>Change password</h2>
     <label>Current password <input type="password" id="pw-cur" autocomplete="current-password" required></label>
@@ -65,6 +73,12 @@ if (window.KTAndroid) {
   try { document.getElementById("pa-ver").textContent = A.appVersion(); } catch (e) { /* older app */ }
   try { document.getElementById("pa-share").textContent = A.sharingLocation() ? "On" : "Off"; } catch (e) { /* older app */ }
   document.getElementById("pa-settings").onclick = () => A.openSettings();
+} else if (/Android/i.test(navigator.userAgent)) {
+  fetch("/api/app/info").then((r) => r.json()).then((i) => {
+    if (!i.available) return;
+    document.getElementById("get-app").hidden = false;
+    document.getElementById("ga-ver").textContent = `Version ${i.version_name}.`;
+  }).catch(() => {});
 }
 "use strict";
 (async () => {

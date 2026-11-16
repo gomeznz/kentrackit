@@ -2,6 +2,39 @@
   "_help": "Newest release first. Each user sees the releases newer than the last one they've seen, once. Add a release at the top and bump VERSION in main.py to match. An item with \"perm\" is only shown to users with that permission (e.g. settings = administrators).",
   "releases": [
     {
+      "version": "0.10",
+      "date": "2026-11-16",
+      "title": "KenTrackIt on Android phones",
+      "items": [
+        {
+          "icon": "📱",
+          "title": "The KenTrackIt phone app",
+          "text": "An Android app with the map, Dispatch and reports, signed in for 30 days. On an Android phone, download it from My account."
+        },
+        {
+          "icon": "🚨",
+          "title": "Emergency alarms on phones",
+          "text": "When a unit presses its emergency button, phones with the app sound a loud alarm over the lock screen, even while the app is closed. It stops when someone acknowledges the emergency."
+        },
+        {
+          "icon": "📍",
+          "title": "Phones on the map",
+          "text": "A phone can share its own location and appears on the map as its own unit, with the owner's name and a phone tag."
+        },
+        {
+          "icon": "🎙️",
+          "title": "Talk with the radio's PTT key",
+          "text": "On PoC radios and rugged phones, the PTT key talks on the Dispatch page. Any other button can be chosen as the Talk key."
+        },
+        {
+          "icon": "⬆️",
+          "title": "Phone app updates",
+          "perm": "settings",
+          "text": "Upload a new KenTrackIt.apk in Settings → Phone app and every phone is offered the update. Phone tracking can be turned off there too."
+        }
+      ]
+    },
+    {
       "version": "0.9",
       "date": "2026-11-02",
       "title": "Real emergencies, and every radio in the list",

@@ -152,6 +152,31 @@ python3 tools/fake_sip.py --call 192.168.1.20:5064 --play group.wav --hangup 15 
 Recordings go to `fake_sip_calls/`, one WAV per call. Other options: `--codec PCMA`, `--ring`, `--max`,
 `--silence` (continuous RTP) and `--vad-db`/`--gap` (what counts as an over). `--help` lists them all.
 
+## Android phone app
+
+`android/` is the KenTrackIt app for Android 8 and later. It shows the KenTrackIt pages themselves (so it
+always matches the box) and adds what a browser can't do:
+
+- **Emergency alarms**: a loud, looping alarm over the lock screen when a unit's emergency comes in, even
+  with the app closed. It stops when anyone acknowledges the emergency (or with Silence on the phone).
+  Other alerts arrive as ordinary notifications.
+- **Phone on the map**: with "Share this phone's location" on, the phone appears as its own unit
+  (`PH0001`, named "<user> (phone)", tagged *phone*). Choose **Allow all the time** for location to keep
+  sending with the screen off. Administrators can turn phone tracking off and set how often phones
+  report in **Settings → Phone app**.
+- **Talk**: the Dispatch page works as on a PC. On PoC radios and rugged phones the PTT key talks
+  (Phone settings → Use the radio's PTT button), or any button can be chosen as the Talk key. Talking
+  works while the app is on screen. The box needs HTTPS for the microphone: the Cloudflare address, or
+  `web.https_port` on the LAN.
+- **Updates from the box**: CI builds the APK on every change under `android/` and publishes it as the
+  [app-latest release](https://github.com/gomeznz/kentrackit/releases/tag/app-latest). Upload that
+  `KenTrackIt.apk` in **Settings → Phone app**; phones are offered the update, and Android phones that
+  open **My account** in a browser get a download button.
+
+The first time, the app asks for the address you use in a browser (e.g. `kentrackit.example.co.nz` or
+`192.168.1.50:8080`), then you sign in as usual and stay signed in for 30 days. On phones that stop
+background apps, use **Don't let battery saving stop KenTrackIt** in Phone settings.
+
 ## What's New pop-up
 
 After an update, each user sees a short "What's new" window the first time they open the map, then not
