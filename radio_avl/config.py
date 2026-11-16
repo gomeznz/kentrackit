@@ -51,6 +51,7 @@ DEFAULTS = {
                 "nxr_host": "", "nxr_port": 5060, "nxr_user": "", "sip_local_port": 5064,
                 "sip_auth_user": "", "sip_auth_password": "", "sip_register": False, "sip_codec": "PCMU",
                 "sip_hold_s": 8, "sip_inbound": True},
+    "mobile": {"tracking": True, "interval_s": 15},
     "lcd": {"enabled": False, "bus": 1, "address": 0x27, "cols": 20, "rows": 4, "backlight": "auto",
             "rotate_s": 5, "flash_emergency": True},
     "polling": {"mode": "off", "command": "", "format": "ascii", "units": "",
@@ -426,6 +427,13 @@ def apply_patch(cfg, patch):
             K["sip_codec"] = cn["sip_codec"]
         if K["enabled"] and K["path"] == "nxr_sip" and not K["nxr_host"]:
             raise Invalid("Enter the NXR's IP address")
+
+    mo = patch.get("mobile")
+    if mo is not None:
+        if "tracking" in mo:
+            new["mobile"]["tracking"] = bool(mo["tracking"])
+        if "interval_s" in mo:
+            new["mobile"]["interval_s"] = _num(mo["interval_s"], 5, 600, "Phone report interval", True)
 
     lc = patch.get("lcd")
     if lc is not None:

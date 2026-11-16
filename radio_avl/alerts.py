@@ -190,13 +190,21 @@ class AlertEngine:
                 continue
             with self.lock:
                 st = self._st(u["id"])
-                if st.get("overdue"):
+                if st.get("overdue") or st.get("sharing_off"):     # a phone whose user stopped sharing
                     continue
                 st["overdue"] = True
                 self._save(u["id"])
             name = u["alias"] or "Unit " + u["id"].lstrip("UuGg0")
             self.raise_alert("overdue", f"{name} hasn't reported for {int((now - u['last_seen']) // 60)} min",
                              u["id"], now, u["last_lat"], u["last_lon"])
+
+    def sharing(self, unit_id, on):
+        """A phone started or stopped sharing its location (so silence isn't 'overdue')."""
+        with self.lock:
+            st = self._st(unit_id)
+            if bool(st.get("sharing_off")) != (not on):
+                st["sharing_off"] = not on
+                self._save(unit_id)
 
     def unit_fences(self):
         with self.lock:

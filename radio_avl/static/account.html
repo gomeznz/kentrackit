@@ -33,6 +33,17 @@
     </div>
   </section>
 
+  <section class="card" id="phone-app" hidden>
+    <h2>This phone</h2>
+    <p class="help">You're using the KenTrackIt phone app. Its own settings cover sharing this phone's location,
+      emergency alarms when the app is closed, the hardware Talk button and app updates.</p>
+    <div class="status-grid">
+      <div><span class="k">App version</span><span id="pa-ver">–</span></div>
+      <div><span class="k">Location sharing</span><span id="pa-share">–</span></div>
+    </div>
+    <div class="actions"><button type="button" id="pa-settings" class="primary">Phone settings</button></div>
+  </section>
+
   <form class="card" id="pw">
     <h2>Change password</h2>
     <label>Current password <input type="password" id="pw-cur" autocomplete="current-password" required></label>
@@ -48,6 +59,13 @@
 <script src="/static/whatsnew.js"></script>
 <script>
 document.getElementById("whats-new").onclick = () => KTWhatsNew.show();
+if (window.KTAndroid) {
+  const A = window.KTAndroid;
+  document.getElementById("phone-app").hidden = false;
+  try { document.getElementById("pa-ver").textContent = A.appVersion(); } catch (e) { /* older app */ }
+  try { document.getElementById("pa-share").textContent = A.sharingLocation() ? "On" : "Off"; } catch (e) { /* older app */ }
+  document.getElementById("pa-settings").onclick = () => A.openSettings();
+}
 "use strict";
 (async () => {
   const $ = (id) => document.getElementById(id);

@@ -225,6 +225,7 @@
       const mid = el("div");
       const parts = [];
       if (u.alias) parts.push("ID " + u.id);
+      if (/^PH\d{4}$/.test(u.id)) parts.push("phone");
       parts.push(callOnly(u) ? "no GPS · calls only" : u.last_valid ? speed(u.last_speed_kn) : "no GPS fix");
       const zn = zoneNames(e.zones); if (zn.length) parts.push(zn.join(", "));
       mid.append(el("div", "name", label(u)), el("div", "sub", parts.join(" · ")));

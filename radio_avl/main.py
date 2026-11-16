@@ -20,6 +20,7 @@ from .alerts import AlertEngine
 from .auth import Auth
 from .channel import Channel
 from .coverage import Coverage
+from .appdist import AppStore
 from .lcd import FrontPanel
 from .talk import Talk
 from .poller import Poller
@@ -48,6 +49,7 @@ class App:
         self.poller = Poller(self)
         self.recorder = Recorder(self)
         self.panel = FrontPanel(self)
+        self.app_store = AppStore(cfg["data_dir"])
         self.talk = Talk(self)
         self.channel.load_last_voice()
         self.ser = None
@@ -132,23 +134,53 @@ class App:
                 self.store.add_event("bad_checksum", d["raw"], d["unit"], rx_time)
                 return
             rx_time = self._discipline_clock(d, rx_time)
-            unit = self.store.add_position(d, rx_time)
-            if unit and not unit["alias"] and self.channel.radio_names.get(d["unit"]):
-                unit = self.store.set_unit(d["unit"], alias=self.channel.radio_names[d["unit"]])
-            self.stats["positions"] += 1
-            zones = self.alerts.on_position(d, unit, rx_time)
+            self.on_position(d, rx_time)
+            return
+        self._handle_other(d, rx_time)
+
+    def phone_unit(self, user):
+        return f"PH{int(user['id']):04d}"
+
+    def phone_position(self, user, b, rx_time):
+        """A position from the KenTrackIt phone app: the phone shows on the map like a radio."""
+        uid = self.phone_unit(user)
+        speed = b.get("speed")
+        d = {"kind": "position", "unit": uid, "lat": float(b["lat"]), "lon": float(b["lon"]), "valid": True,
+             "speed_kn": round(float(speed) * 1.943844, 1) if speed is not None else 0.0,
+             "course": float(b["course"]) if b.get("course") is not None else None,
+             "fix_time": float(b.get("time", rx_time * 1000)) / 1000, "extra": {}, "status": "",
+             "checksum_ok": True, "raw": None, "phone": True,
+             "accuracy": b.get("accuracy")}
+        u = self.store.unit(uid)
+        if not u or not u["alias"]:
+            self.store.set_unit(uid, alias=(user.get("display_name") or user["username"]) + " (phone)",
+                                notes="KenTrackIt phone app")
+        self.alerts.sharing(uid, True)
+        self.on_position(d, rx_time, radio=False)
+        return uid
+
+    def on_position(self, d, rx_time, radio=True):
+        unit = self.store.add_position(d, rx_time)
+        if unit and not unit["alias"] and self.channel.radio_names.get(d["unit"]):
+            unit = self.store.set_unit(d["unit"], alias=self.channel.radio_names[d["unit"]])
+        self.stats["positions"] += 1
+        zones = self.alerts.on_position(d, unit, rx_time)
+        if radio:
             self.channel.on_position(d["unit"], rx_time)
             self.poller.on_position(d["unit"], rx_time)
-            if d["valid"]:
-                self.coverage.on_report(d["unit"], d["lat"], d["lon"], rx_time,
-                                        polling_active=self.cfg["polling"]["mode"] == "live")
-            self.broker.publish("position", {
-                "unit": unit, "rx_time": rx_time, "valid": d["valid"], "zones": zones["fences"],
-                "lat": d["lat"], "lon": d["lon"],
-                "speed_kn": d["speed_kn"], "course": d["course"]})
-            log.info("unit %s %s %.5f,%.5f", d["unit"], "fix" if d["valid"] else "NO FIX",
-                     d["lat"] or 0, d["lon"] or 0)
-        elif kind == "busy":
+        if d["valid"] and radio:
+            self.coverage.on_report(d["unit"], d["lat"], d["lon"], rx_time,
+                                    polling_active=self.cfg["polling"]["mode"] == "live")
+        self.broker.publish("position", {
+            "unit": unit, "rx_time": rx_time, "valid": d["valid"], "zones": zones["fences"],
+            "lat": d["lat"], "lon": d["lon"],
+            "speed_kn": d["speed_kn"], "course": d["course"]})
+        log.info("unit %s %s %.5f,%.5f", d["unit"], "fix" if d["valid"] else "NO FIX",
+                 d["lat"] or 0, d["lon"] or 0)
+
+    def _handle_other(self, d, rx_time):
+        kind = d["kind"]
+        if kind == "busy":
             self.broker.publish("channel", {"busy": d["busy"], "t": rx_time}, sticky=True)
             self.channel.on_busy(d["busy"], rx_time)
         elif kind == "display":

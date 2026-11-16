@@ -25,7 +25,7 @@ from urllib.parse import urlparse, parse_qs, quote
 from . import config as config_mod
 
 log = logging.getLogger("radio-avl")
-from . import geo, reports, voice as voice_mod, lcd as lcd_mod, talk as talk_mod
+from . import appdist, geo, reports, voice as voice_mod, lcd as lcd_mod, talk as talk_mod
 from .auth import AuthError, ROLES, REMEMBER_S
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -454,6 +454,18 @@ def make_handler(app):
                 return self._static("console.html") if self._need("listen") else None
             if p == "/api/console/ws":
                 return self._ws_console()
+            if p == "/api/mobile":
+                u = app.store.unit(app.phone_unit(self.user))
+                return self._json({"tracking": cfg["mobile"]["tracking"], "interval_s": cfg["mobile"]["interval_s"],
+                                   "unit": app.phone_unit(self.user), "name": u["alias"] if u else "",
+                                   "title": cfg["web"]["title"], "can_talk": app.auth.can(self.user, "talk")})
+            if p == "/api/app/info":
+                info = app.app_store.info()
+                return self._json(dict(info, url="/app/kentrackit.apk", available=True) if info else {"available": False})
+            if p == "/app/kentrackit.apk":
+                if not app.app_store.info():
+                    return self._json({"error": "No app has been uploaded to this system"}, 404)
+                return self._file(app.app_store.path, "application/vnd.android.package-archive", "KenTrackIt.apk")
             if p == "/api/console/devices":
                 if not self._need("settings"):
                     return
@@ -529,7 +541,8 @@ def make_handler(app):
                 rows = [e for e in rows if (admin or e["kind"] not in PRIVATE_EVENTS) and self._sees(e["unit_id"])]
                 return self._json(rows[:int(qs.get("limit", [100])[0])])
             if p == "/api/stream":
-                return self._stream()
+                only = set(",".join(qs.get("events", [])).split(",")) - {""}
+                return self._stream(only)
             if p == "/api/coverage":
                 t0, t1 = self._range(qs)
                 cell = max(50, min(int(qs.get("cell", [200])[0]), 2000))
@@ -672,12 +685,35 @@ def make_handler(app):
                 return self._json({"error": "Cross-site request refused"}, 403)
             if not self._gate(p):
                 return
+            if p == "/api/app/upload":
+                return self._app_upload()
             body = self._body()
             if body is None:
                 return self._json({"error": "Bad request"}, 400)
 
+            # ---- phone app
+            if p == "/api/mobile/position":
+                if not app.cfg["mobile"]["tracking"]:
+                    return self._json({"error": "Phone tracking is turned off on this system", "tracking": False}, 403)
+                try:
+                    lat, lon = float(body["lat"]), float(body["lon"])
+                    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                        raise ValueError
+                except (KeyError, TypeError, ValueError):
+                    return self._json({"error": "lat and lon expected"}, 400)
+                uid = app.phone_position(self.user, body, app.now())
+                return self._json({"ok": True, "unit": uid, "interval_s": app.cfg["mobile"]["interval_s"]})
+            if p == "/api/mobile/sharing":
+                uid = app.phone_unit(self.user)
+                on = bool(body.get("on"))
+                app.alerts.sharing(uid, on)
+                app.store.add_event("phone", f"location sharing {'on' if on else 'off'}", uid, app.now())
+                return self._json({"ok": True})
+
             # ---- sign in / out / first-time setup
             if p == "/api/login":
+                if "KenTrackItApp/" in self.headers.get("User-Agent", ""):
+                    body["remember"] = True         # the phone app stays signed in (30 days, renewed with use)
                 try:
                     token, u = app.auth.login(body.get("username", ""), body.get("password", ""),
                                               bool(body.get("remember")), self._ip(),
@@ -830,6 +866,12 @@ def make_handler(app):
                 return self._json({"error": "Cross-site request refused"}, 403)
             if not self._gate(p):
                 return
+            if p == "/api/app":
+                if not self._need("settings"):
+                    return
+                app.app_store.remove()
+                app.auth.audit(self.user, "removed the phone app installer")
+                return self._json({"ok": True})
             m = FENCE_RE.match(p)
             if m:
                 if not self._need("zones"):
@@ -1028,6 +1070,27 @@ def make_handler(app):
             self._send(200, data, "application/octet-stream",
                        {"Content-Disposition": f'attachment; filename="{name}"'})
 
+        def _app_upload(self):
+            if not self._need("settings"):
+                return
+            n = int(self.headers.get("Content-Length", 0) or 0)
+            if not 0 < n <= appdist.MAX_SIZE:
+                return self._json({"error": "Choose an APK file (up to 150 MB)"}, 400)
+            buf = bytearray()
+            while len(buf) < n:
+                chunk = self.rfile.read(min(1 << 20, n - len(buf)))
+                if not chunk:
+                    break
+                buf += chunk
+            data = bytes(buf)
+            try:
+                info = app.app_store.put(data)
+            except appdist.APKError as e:
+                return self._json({"error": str(e)}, 400)
+            app.auth.audit(self.user, f"uploaded phone app {info['version_name']} ({info['version_code']})")
+            app.broker.publish("app_update", info)
+            return self._json(dict(info, ok=True))
+
         # ---- dispatch console audio: a minimal WebSocket ------------------------------------
         def _ws_console(self):
             if not self._need("listen"):
@@ -1107,7 +1170,7 @@ def make_handler(app):
                 if state["holding"]:
                     app.talk.release(user, "connection closed")
 
-        def _stream(self):
+        def _stream(self, only=None):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
@@ -1119,6 +1182,8 @@ def make_handler(app):
                 while not app.stop.is_set():
                     try:
                         ev, data = q.get(timeout=15)
+                        if only and ev not in only:
+                            continue
                         self.wfile.write(f"event: {ev}\ndata: {data}\n\n".encode())
                     except queue.Empty:
                         # signed out, disabled or session expired: end the stream

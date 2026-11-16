@@ -132,6 +132,8 @@
   });
   document.addEventListener("keyup", (e) => { if (e.code === "Space" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); pttUp(); } });
   window.addEventListener("blur", pttUp);                 // switching windows mid-over releases the button
+  // the KenTrackIt phone app calls this for its hardware Talk key (PoC radios, rugged phones, BT mics)
+  window.KTPtt = (on) => { if (on) pttDown(); else pttUp(); return true; };
 
   // ---- audio -----------------------------------------------------------------------------------
   let ctx = null, player = null, mic = null, micReady = null;

@@ -183,6 +183,29 @@
     for (let r = 0; r < C.rows; r++) { const d = document.createElement("div"); d.textContent = lcdChars((st.lines[r] || "").padEnd(C.cols).slice(0, C.cols)); pv.appendChild(d); }
     pv.classList.toggle("dark", st.state === "error");
   }
+  // ---- phone app --------------------------------------------------------------------------
+  async function loadApk() {
+    try {
+      const i = await api("/api/app/info");
+      $("mo-apk").textContent = i.available ? `Version ${i.version_name} (build ${i.version_code}), ${bytes(i.size)}, uploaded ${new Date(i.uploaded * 1000).toLocaleDateString()}` : "No app uploaded yet";
+      $("mo-rm").hidden = !i.available; $("mo-dl").hidden = !i.available;
+    } catch (e) { $("mo-apk").textContent = e.message; }
+  }
+  function fillMobile() { $("mo-track").checked = S.mobile.tracking; $("mo-int").value = S.mobile.interval_s; loadApk(); }
+  $("mo-up").onclick = async () => {
+    const f = $("mo-file").files[0];
+    if (!f) return toast("Choose the KenTrackIt.apk file first", true);
+    $("mo-up").disabled = true; $("mo-up").textContent = "Uploading…";
+    try { const i = await api("/api/app/upload", { method: "POST", headers: { "Content-Type": "application/vnd.android.package-archive" }, body: f });
+          toast(`Uploaded version ${i.version_name}. Phones will be offered the update.`); $("mo-file").value = ""; loadApk(); }
+    catch (e) { toast(e.message, true); }
+    $("mo-up").disabled = false; $("mo-up").textContent = "Upload";
+  };
+  $("mo-rm").onclick = async () => {
+    if (!confirm("Remove the app installer from this box? Phones keep the app they have.")) return;
+    try { await api("/api/app", { method: "DELETE" }); toast("Removed"); loadApk(); } catch (e) { toast(e.message, true); }
+  };
+
   function fillLcd() {
     const C = S.lcd;
     $("lcd-on").checked = C.enabled; $("lcd-addr").value = "0x" + C.address.toString(16).toUpperCase();
@@ -382,6 +405,7 @@
       if ($("cn-apass").value) c.sip_auth_password = $("cn-apass").value;
       return { console: c };
     },
+    mobile: () => ({ mobile: { tracking: $("mo-track").checked, interval_s: +$("mo-int").value } }),
     lcd: () => ({ lcd: { enabled: $("lcd-on").checked, bus: +$("lcd-bus").value, address: $("lcd-addr").value.trim(),
       size: $("lcd-size").value, backlight: $("lcd-bl").value, rotate_s: +$("lcd-rot").value,
       flash_emergency: $("lcd-flash").checked } }),
@@ -539,7 +563,7 @@
   setInterval(() => { if (!$("cap-stop").hidden) loadCaptures(); }, 5000);
 
   // ---- load ----------------------------------------------------------------------
-  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillVoice(); fillConsole(); fillLcd(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
+  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillVoice(); fillConsole(); fillMobile(); fillLcd(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
   async function refresh() {
     try { SYS = await api("/api/system"); fillStatus(); } catch (e) { /* offline briefly */ }
   }

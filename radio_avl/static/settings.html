@@ -372,6 +372,25 @@
     <div class="actions"><a class="btn" href="/console">Open the console</a><button type="submit">Save</button></div>
   </form>
 
+  <!-- Phone app -->
+  <form class="card" data-section="mobile" id="mobile-card">
+    <h2>Phone app</h2>
+    <p class="help">The KenTrackIt Android app opens these same pages on a phone, plus: an emergency alarm on the phone
+      even when the app is closed, the phone's own location on the map (as an extra unit), and the Talk button
+      on PoC radios and rugged phones. Phones get the app, and its updates, from this box.</p>
+    <label class="check"><input type="checkbox" id="mo-track"> Let phones share their location (they show on the map as "Name (phone)")</label>
+    <label>Phones report every <span class="unit-input"><input id="mo-int" type="number" min="5" max="600" required>seconds while sharing</span></label>
+    <div class="actions"><button type="submit">Save</button></div>
+    <h3>The app installer</h3>
+    <div class="status-grid">
+      <div><span class="k">On this box</span><span id="mo-apk">–</span></div>
+    </div>
+    <p class="help">Upload a new <code>KenTrackIt.apk</code> here and every phone is told an update is ready. Phones without
+      the app can download it from <a href="/app/kentrackit.apk" id="mo-dl">this box</a> after signing in.</p>
+    <div class="row"><input type="file" id="mo-file" accept=".apk,application/vnd.android.package-archive">
+      <button type="button" id="mo-up">Upload</button><button type="button" id="mo-rm" class="danger">Remove</button></div>
+  </form>
+
   <!-- Front-panel LCD -->
   <form class="card" data-section="lcd" id="lcd-card">
     <h2>Front-panel display</h2>
