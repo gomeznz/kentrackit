@@ -75,3 +75,7 @@ details summary { cursor: pointer; font-size: 13px; font-weight: 550; color: var
 .lcd-preview.dark { background: #11225a; color: #6d84c4; text-shadow: none; }
 .lcd-preview div { min-height: 1.25em; }
 @media (max-width: 480px) { .lcd-preview { font-size: 12.5px; } }
+
+/* the hosted service shows a company's own settings, not the server's or the site's hardware */
+body.hosted .box-only { display: none !important; }
+body:not(.hosted) .hosted-only { display: none !important; }

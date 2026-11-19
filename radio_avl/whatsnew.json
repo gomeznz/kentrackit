@@ -1,6 +1,32 @@
 {
-  "_help": "Newest release first. Each user sees the releases newer than the last one they've seen, once. Add a release at the top and bump VERSION in main.py to match. An item with \"perm\" is only shown to users with that permission (e.g. settings = administrators).",
+  "_help": "Newest release first. Each user sees the releases newer than the last one they've seen, once. Add a release at the top and bump VERSION in main.py to match. An item with \"perm\" is only shown to users with that permission (e.g. settings = administrators). An item with \"only\": \"box\" or \"hosted\" is only shown on a site box or on the hosted service.",
   "releases": [
+    {
+      "version": "0.11",
+      "date": "2026-11-20",
+      "title": "The hosted service",
+      "items": [
+        {
+          "icon": "☁️",
+          "title": "KenTrackIt as a hosted service",
+          "text": "KenTrackIt can now run on one server for many companies, each with its own users, units, history and settings, reached from anywhere. Each site's KenTrackIt box sends its radio data up, and keeps it safe while the internet is down."
+        },
+        {
+          "icon": "📡",
+          "title": "This box as a gateway",
+          "perm": "settings",
+          "text": "Settings → Hosted service sends this site's radio data to a company on the hosted service, with the address and gateway key from ASI. Everything here keeps working as before.",
+          "only": "box"
+        },
+        {
+          "icon": "🛰️",
+          "title": "Gateway status",
+          "perm": "settings",
+          "text": "On the hosted service, Settings shows whether the site's gateway and radio are connected. The radio, recording, display and talk-back settings stay on the site's box.",
+          "only": "hosted"
+        }
+      ]
+    },
     {
       "version": "0.10",
       "date": "2026-11-16",

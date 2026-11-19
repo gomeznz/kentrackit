@@ -52,6 +52,8 @@ DEFAULTS = {
                 "sip_auth_user": "", "sip_auth_password": "", "sip_register": False, "sip_codec": "PCMU",
                 "sip_hold_s": 8, "sip_inbound": True},
     "mobile": {"tracking": True, "interval_s": 15},
+    # this Pi as the gateway for a company on the hosted KenTrackIt service
+    "uplink": {"enabled": False, "url": "", "token": ""},
     "lcd": {"enabled": False, "bus": 1, "address": 0x27, "cols": 20, "rows": 4, "backlight": "auto",
             "rotate_s": 5, "flash_emergency": True},
     "polling": {"mode": "off", "command": "", "format": "ascii", "units": "",
@@ -177,6 +179,7 @@ def public(cfg):
     out["tiles"]["linz_key_set"] = bool(out["tiles"].get("linz_key"))
     out["tiles"]["linz_key"] = ""
     out["console"]["sip_password_set"] = bool(out["console"].pop("sip_auth_password", ""))
+    out["uplink"]["token_set"] = bool(out["uplink"].pop("token", ""))
     return out
 
 
@@ -197,8 +200,19 @@ def _num(v, lo, hi, name, integer=False):
     return x
 
 
-def apply_patch(cfg, patch):
+# On the hosted service the radio, sound cards, display and web server belong to the site's Pi
+# (the gateway) or to ASI, so a company's administrators can't change them.
+HOSTED_LOCKED = ("serial", "lcd", "console", "recording", "polling", "tiles", "uplink")
+
+
+def apply_patch(cfg, patch, hosted=False):
     """Return a new validated config with `patch` applied. Raises Invalid."""
+    if hosted:
+        locked = [k for k in patch if k in HOSTED_LOCKED]
+        if any(k != "title" for k in (patch.get("web") or {})):
+            locked.append("web")
+        if locked:
+            raise Invalid("On the hosted service these are set on the site's gateway or by ASI: " + ", ".join(locked))
     new = copy.deepcopy(cfg)
 
     s = patch.get("serial")
@@ -434,6 +448,24 @@ def apply_patch(cfg, patch):
             new["mobile"]["tracking"] = bool(mo["tracking"])
         if "interval_s" in mo:
             new["mobile"]["interval_s"] = _num(mo["interval_s"], 5, 600, "Phone report interval", True)
+
+    up = patch.get("uplink")
+    if up is not None:
+        U = new["uplink"]
+        if "enabled" in up:
+            U["enabled"] = bool(up["enabled"])
+        if "url" in up:
+            u = str(up["url"]).strip().rstrip("/")
+            if u and not re.fullmatch(r"https?://[A-Za-z0-9.\-]{1,253}(:\d{1,5})?", u):
+                raise Invalid("Hosted service address should look like https://track.example.co.nz")
+            U["url"] = u
+        if up.get("token"):
+            t = str(up["token"]).strip()
+            if not re.fullmatch(r"gw_[A-Za-z0-9_\-]{20,80}", t):
+                raise Invalid("That doesn't look like a gateway key (they start with gw_)")
+            U["token"] = t
+        if U["enabled"] and not (U["url"] and U["token"]):
+            raise Invalid("Enter the hosted service address and this site's gateway key")
 
     lc = patch.get("lcd")
     if lc is not None:

@@ -31,6 +31,7 @@ SESSION_IDLE_S = 12 * 3600          # normal login: signed out after 12 h withou
 REMEMBER_S = 30 * 86400             # "keep me signed in": 30 days
 MAX_FAILS, MAX_FAILS_IP, FAIL_WINDOW_S, LOCK_S = 5, 20, 300, 300   # per username / per address
 USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]{2,32}$")
+SUPPORT_USER = "asi-support"        # hosted service: the account ASI's support sessions use
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -130,6 +131,14 @@ class Auth:
         other = self.by_name(username)
         if other and (not cur or other["id"] != cur["id"]):
             raise AuthError(f"There's already a user called {username}")
+        hub = getattr(self.app, "hub", None)
+        if hub and (not cur or cur["username"].lower() != username.lower()):
+            # on the hosted service people sign in without saying which company they're with,
+            # so a username can only be used once across all companies
+            if username.lower() == SUPPORT_USER and not data.get("_support"):
+                raise AuthError(f"{username} is reserved for ASI support")
+            if hub.username_taken(username, self.app):
+                raise AuthError(f"The username {username} is already used on this service; pick another")
         role = data.get("role", cur["role"] if cur else "viewer")
         if role not in ROLES:
             raise AuthError("Unknown role")
@@ -242,16 +251,26 @@ class Auth:
         if not u["enabled"]:
             self.audit(u, f"sign-in refused (account disabled) from {ip}")
             raise AuthError("This account is disabled")
-        token = secrets.token_urlsafe(32)
-        now = time.time()
-        with self.lock, self.db:
-            self.db.execute("INSERT INTO sessions VALUES (?,?,?,?,?,?,?,?)",
-                            (_h(token), u["id"], now, now, now + (REMEMBER_S if remember else SESSION_IDLE_S),
-                             int(bool(remember)), ip, str(agent)[:200]))
-            self.db.execute("UPDATE users SET last_login=? WHERE id=?", (now, u["id"]))
-            self.db.execute("DELETE FROM sessions WHERE expires < ?", (now,))
+        if getattr(self.app, "hub", None) and u["username"].lower() == SUPPORT_USER:
+            self._fail(*keys)
+            raise AuthError("Wrong username or password")
+        token = self.create_session(u, remember, ip, agent)
         self.audit(u, f"signed in from {ip}")
         return token, u
+
+    def create_session(self, u, remember, ip, agent, lifetime=None):
+        """A new signed-in session for user u. On the hosted service the token starts with the
+        company's prefix, which is how a request finds its company."""
+        token = getattr(self.app, "session_prefix", "") + secrets.token_urlsafe(32)
+        now = time.time()
+        life = lifetime or (REMEMBER_S if remember else SESSION_IDLE_S)
+        with self.lock, self.db:
+            self.db.execute("INSERT INTO sessions VALUES (?,?,?,?,?,?,?,?)",
+                            (_h(token), u["id"], now, now, now + life,
+                             int(bool(remember or lifetime)), ip, str(agent)[:200]))
+            self.db.execute("UPDATE users SET last_login=? WHERE id=?", (now, u["id"]))
+            self.db.execute("DELETE FROM sessions WHERE expires < ?", (now,))
+        return token
 
     def session_user(self, token):
         if not token:

@@ -27,17 +27,22 @@ from .poller import Poller
 from .recorder import Recorder
 from .voice import VoiceRecorder
 from .store import Store
+from .uplink import Uplink
 from .web import Broker, TileCache, serve, rebind
 
 log = logging.getLogger("radio-avl")
 
 class App:
-    VERSION = "0.10"
+    VERSION = "0.11"
 
-    def __init__(self, cfg, config_path=None, mode="serial"):
+    def __init__(self, cfg, config_path=None, mode="serial", hub=None, slug=None, tiles=None, app_store=None):
         self.cfg = cfg
         self.config_path = config_path
         self.mode = mode
+        # On the hosted service each company is one App; hub is the server that holds them all.
+        self.hub, self.slug = hub, slug
+        self.hosted = hub is not None
+        self.session_prefix = f"{slug}~" if self.hosted else ""
         os.makedirs(cfg["data_dir"], exist_ok=True)
         self.store = Store(os.path.join(cfg["data_dir"], "avl.db"))
         self.broker = Broker()
@@ -49,13 +54,18 @@ class App:
         self.poller = Poller(self)
         self.recorder = Recorder(self)
         self.panel = FrontPanel(self)
-        self.app_store = AppStore(cfg["data_dir"])
+        self.app_store = app_store or AppStore(cfg["data_dir"])
         self.talk = Talk(self)
+        self.uplink = None if self.hosted else Uplink(self)
         self.channel.load_last_voice()
         self.ser = None
         self.ser_lock = threading.Lock()
-        self.tiles = TileCache(cfg, cfg["data_dir"])
-        self.sat_tiles = TileCache(cfg, cfg["data_dir"], "sat")
+        if tiles:                                   # hosted: one map tile cache for every company
+            self.tiles, self.sat_tiles = tiles
+        else:
+            self.tiles = TileCache(cfg, cfg["data_dir"])
+            self.sat_tiles = TileCache(cfg, cfg["data_dir"], "sat")
+        self.reader = kenwood.FrameReader()         # hosted: frames arriving from the gateway
         self.servers = []
         self.auth_cache = set()
         self.cfg_lock = threading.Lock()
@@ -73,7 +83,7 @@ class App:
         """Validate, save and apply a settings change. Returns (cfg, notes)."""
         with self.cfg_lock:
             old = self.cfg
-            new = config_mod.apply_patch(old, patch)
+            new = config_mod.apply_patch(old, patch, hosted=self.hosted)
             notes = []
             new_server = None
             if new["web"]["port"] != old["web"]["port"]:
@@ -102,6 +112,10 @@ class App:
                 self.talk._publish()
                 if new["console"]["enabled"] != old["console"]["enabled"]:
                     self.voice.restart.set()        # live listen needs the sound card open
+            if new["uplink"] != old["uplink"]:
+                self.uplink.restart.set()
+                notes.append("Connecting to the hosted service." if new["uplink"]["enabled"]
+                             else "No longer sending to the hosted service.")
             if new["tiles"] != old["tiles"]:
                 self.tiles = TileCache(new, new["data_dir"])
                 self.sat_tiles = TileCache(new, new["data_dir"], "sat")
@@ -133,7 +147,8 @@ class App:
             if d["checksum_ok"] is False and self.cfg["drop_bad_checksum"]:
                 self.store.add_event("bad_checksum", d["raw"], d["unit"], rx_time)
                 return
-            rx_time = self._discipline_clock(d, rx_time)
+            if not self.hosted:             # the gateway already corrected its own clock; ours is NTP
+                rx_time = self._discipline_clock(d, rx_time)
             self.on_position(d, rx_time)
             return
         self._handle_other(d, rx_time)
@@ -242,8 +257,24 @@ class App:
         self.last_seq = seq
 
     def link(self, up, detail=""):
+        changed = (up, detail) != (self.stats["link_up"], self.stats["link_detail"])
         self.stats["link_up"], self.stats["link_detail"] = up, detail
         self.broker.publish("link", {"up": up, "detail": detail, "t": time.time()}, sticky=True)
+        if self.uplink and not self.hosted and changed:
+            self.uplink.status_changed()
+
+    # ---- hosted: radio data from the site's gateway --------------------
+    def ingest(self, chunks):
+        """Raw serial bytes the gateway Pi read from the monitor radio, as [(time, bytes)...],
+        oldest first. Same path as the serial port on a standalone box."""
+        for t, data in chunks:
+            self.stats["frames_in"] = self.stats.get("frames_in", 0) + 1
+            self.recorder.rx(data, t)
+            for fr in self.reader.feed(data):
+                try:
+                    self.handle(fr, t)
+                except Exception as e:          # one bad frame mustn't stop the rest
+                    log.warning("%s: frame %r: %s", self.slug, fr[:40], e)
 
     # ---- sources ------------------------------------------------------
     def run_serial(self):
@@ -264,6 +295,7 @@ class App:
                         if data:
                             now = self.now()
                             self.recorder.rx(data, now)
+                            self.uplink.rx(data, now)
                             for fr in reader.feed(data):
                                 self.handle(fr, now)
                 self.ser = None
@@ -307,7 +339,9 @@ class App:
                 if speed and prev is not None:
                     self.stop.wait(max(0, (t - prev) / speed))
                 prev = t
-                for fr in reader.feed(bytes.fromhex(m.group(2).replace(" ", ""))):
+                data = bytes.fromhex(m.group(2).replace(" ", ""))
+                self.uplink.rx(data, t)             # a replaying test box can feed the hosted service too
+                for fr in reader.feed(data):
                     self.handle(fr, t)
                 if self.stop.is_set():
                     return
@@ -361,6 +395,7 @@ def main(argv=None):
     threading.Thread(target=app.voice.run, daemon=True, name="voice").start()
     threading.Thread(target=app.panel.run, daemon=True, name="lcd").start()
     threading.Thread(target=app.talk.run, daemon=True, name="talk").start()
+    threading.Thread(target=app.uplink.run, daemon=True, name="uplink").start()
 
     signal.signal(signal.SIGTERM, lambda *_: app.stop.set())
     try:
@@ -372,6 +407,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         pass
     app.stop.set()
+    app.uplink.flush()
     if app.restart_requested:
         return 3                      # non-zero so systemd restarts us
 

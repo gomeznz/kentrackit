@@ -1,0 +1,22 @@
+[Unit]
+Description=KenTrackIt hosted service (companies, gateways and ASI administration)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=kentrackit-hub
+Group=kentrackit-hub
+WorkingDirectory=/opt/kentrackit-hub
+ExecStart=/usr/bin/python3 -m radio_avl.hub --data /var/lib/kentrackit-hub --host 0.0.0.0 --port 8100
+Restart=always
+RestartSec=5
+# Public access is through the Cloudflare tunnel; the LAN address is for first-time setup.
+# Hardening: it only needs its own data folder.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/kentrackit-hub
+
+[Install]
+WantedBy=multi-user.target

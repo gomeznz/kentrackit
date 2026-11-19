@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/static/logo-mark.svg">
+<meta name="theme-color" content="#0b1b33">
+<title>KenTrackIt service</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/auth.css">
+<link rel="stylesheet" href="/static/settings.css">
+<link rel="stylesheet" href="/static/hub.css">
+</head>
+<body class="auth" id="body">
+<canvas id="wall" aria-hidden="true"></canvas>
+
+<!-- signed out: sign in, or create the first ASI administrator -->
+<main class="auth-card" id="signin" hidden>
+  <div class="brand">
+    <img src="/static/logo-mark.svg" alt="" class="brand-mark">
+    <div class="wordmark">KenTrack<i>It</i></div>
+    <div class="tagline">Hosted service administration</div>
+  </div>
+  <p class="small intro" id="setup-intro" hidden>No administrators yet. Create the first ASI administrator account.</p>
+  <form id="f">
+    <label id="f-name-wrap" hidden>Your name <input id="f-name" autocomplete="name"></label>
+    <label>Username <input id="f-user" autocomplete="username" required autofocus></label>
+    <label>Password <input id="f-pass" type="password" autocomplete="current-password" required></label>
+    <div id="f-err" class="err" role="alert" hidden></div>
+    <button type="submit" class="primary" id="f-btn">Sign in</button>
+  </form>
+  <p class="small">This is for ASI staff. Company users sign in at <a href="/login">the usual page</a>.</p>
+</main>
+
+<!-- signed in -->
+<div class="page" id="main" hidden>
+  <header class="top">
+    <h1 class="title-row"><img src="/static/logo-mark.svg" alt="" class="logo"><span id="h-title">KenTrackIt</span> service</h1>
+    <span class="me-link"><span id="h-me"></span> · <button type="button" class="link" id="signout">Sign out</button></span>
+  </header>
+  <div id="toast" class="toast" hidden></div>
+
+  <section class="card">
+    <div class="card-head"><h2>Companies</h2><button type="button" id="co-add-btn" class="primary-btn">Add a company</button></div>
+    <p class="help">Each company has its own users, units, history, alerts and settings, kept in its own database.
+      Its gateway (the Pi with the monitor radio on site) sends radio data here with the company's gateway key.</p>
+
+    <form id="co-add" class="sub-form" hidden autocomplete="off">
+      <h3>New company</h3>
+      <div class="two">
+        <label>Company name <input id="ca-name" maxlength="80" required placeholder="Southland District Council"></label>
+        <label>Short name <input id="ca-slug" maxlength="30" required pattern="[a-z][a-z0-9\-]{1,29}" placeholder="sdc">
+          <span class="hint">Lowercase letters, digits and -. Used inside sign-in keys; can't be changed.</span></label>
+      </div>
+      <h3>Their first administrator</h3>
+      <div class="two">
+        <label>Name <input id="ca-aname" maxlength="60" placeholder="Jo Bloggs"></label>
+        <label>Username <input id="ca-auser" maxlength="32" required>
+          <span class="hint">Unique across the whole service.</span></label>
+      </div>
+      <label>Password <input id="ca-apass" type="text" minlength="8" required>
+        <span class="hint">At least 8 characters. Ask them to change it after signing in.</span></label>
+      <div class="actions"><button type="button" id="ca-cancel">Cancel</button><button type="submit" class="primary-btn">Create company</button></div>
+    </form>
+
+    <div id="keybox" class="keybox" hidden>
+      <h3 id="kb-title">Gateway key</h3>
+      <p class="help">Shown once. On the site's Pi, open <b>Settings → Hosted service</b>, tick the box, and enter:</p>
+      <div class="kv"><span class="k">Service address</span><code id="kb-url"></code><button type="button" class="link" data-copy="kb-url">Copy</button></div>
+      <div class="kv"><span class="k">Gateway key</span><code id="kb-key"></code><button type="button" class="link" data-copy="kb-key">Copy</button></div>
+      <div class="actions"><button type="button" id="kb-done">Done, I've saved it</button></div>
+    </div>
+
+    <div id="co-list" class="co-list"></div>
+  </section>
+
+  <section class="card">
+    <h2>Phone app</h2>
+    <p class="help">The KenTrackIt Android app for every company on this service. Upload a new <code>KenTrackIt.apk</code>
+      (from the app-latest release on GitHub) and every signed-in phone is offered the update.</p>
+    <div class="status-grid"><div><span class="k">On this service</span><span id="apk">–</span></div></div>
+    <div class="row"><input type="file" id="apk-file" accept=".apk,application/vnd.android.package-archive">
+      <button type="button" id="apk-up">Upload</button><button type="button" id="apk-rm" class="danger" hidden>Remove</button></div>
+  </section>
+
+  <form class="card" id="svc">
+    <h2>Service</h2>
+    <label>Name on the sign-in page <input id="svc-title" maxlength="60" required></label>
+    <div class="two">
+      <label>Map
+        <select id="svc-tiles">
+          <option value="osm">OpenStreetMap</option>
+          <option value="linz_aerial">LINZ aerial (API key)</option>
+          <option value="none">None</option>
+        </select>
+      </label>
+      <label>Satellite
+        <select id="svc-sat">
+          <option value="linz_aerial">LINZ aerial (API key)</option>
+          <option value="esri">Esri World Imagery</option>
+          <option value="none">None</option>
+        </select>
+      </label>
+    </div>
+    <label>LINZ API key <input id="svc-linz" autocomplete="off" placeholder="from basemaps.linz.govt.nz"></label>
+    <p class="help">Map tiles are shared by every company and cached on this server.</p>
+    <div class="actions"><button type="submit">Save</button></div>
+  </form>
+
+  <section class="card">
+    <div class="card-head"><h2>ASI administrators</h2><button type="button" id="ad-add-btn">Add</button></div>
+    <p class="help">People here can add companies, issue gateway keys and open support sessions in any company.
+      Each support session shows in that company's audit log.</p>
+    <form id="ad-form" class="sub-form" hidden autocomplete="off">
+      <div class="two">
+        <label>Name <input id="ad-name" maxlength="60"></label>
+        <label>Username <input id="ad-user" maxlength="32" required></label>
+      </div>
+      <label>Password <input id="ad-pass" type="password" minlength="8" autocomplete="new-password"></label>
+      <div class="actions"><button type="button" id="ad-cancel">Cancel</button><button type="submit">Save</button></div>
+    </form>
+    <table class="units users"><tbody id="ad-rows"></tbody></table>
+  </section>
+
+  <section class="card">
+    <h2>Activity</h2>
+    <ul class="audit" id="activity"></ul>
+  </section>
+</div>
+<script src="/static/wallpaper.js"></script>
+<script src="/static/hub.js"></script>
+</body>
+</html>

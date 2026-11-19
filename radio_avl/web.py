@@ -28,7 +28,7 @@ log = logging.getLogger("radio-avl")
 from . import appdist, geo, reports, voice as voice_mod, lcd as lcd_mod, talk as talk_mod
 from .auth import AuthError, ROLES, REMEMBER_S
 
-STATIC = os.path.join(os.path.dirname(__file__), "static")
+STATIC = os.path.abspath(os.path.join(os.path.dirname(__file__), "static"))
 TILE_RE = re.compile(r"^/tiles/(sat/)?(\d{1,2})/(\d{1,7})/(\d{1,7})$")
 _WN = {"mtime": None, "releases": []}
 
@@ -46,7 +46,7 @@ def _releases():
     return _WN["releases"]
 
 
-def whats_new(user, show_all=False):
+def whats_new(user, show_all=False, hosted=False):
     """The releases this user hasn't seen yet (or all of them), with items they can't use left out.
     Someone who's never seen any gets just the latest, not the whole history."""
     rel = _releases()
@@ -65,7 +65,9 @@ def whats_new(user, show_all=False):
     perms = set(user["perms"])
     out = []
     for r in pick:
-        items = [i for i in r.get("items", []) if not i.get("perm") or i["perm"] in perms]
+        where = "hosted" if hosted else "box"
+        items = [i for i in r.get("items", []) if (not i.get("perm") or i["perm"] in perms)
+                 and i.get("only", where) == where]
         if items:
             out.append({**{k: r.get(k) for k in ("version", "date", "title")}, "items": items})
     return {"latest": versions[0], "releases": out}
@@ -92,6 +94,9 @@ POLL_RE = re.compile(r"^/api/units/([A-Za-z0-9_.-]{1,32})/poll$")
 CAPTURE_RE = re.compile(r"^/api/captures/(capture_\d{8}_\d{6}\.log)$")
 COOKIE = "kt_session"
 PUBLIC = {"/login", "/login/", "/setup", "/setup/", "/api/login", "/api/setup", "/api/auth-status"}
+# On the hosted service these belong to the server or the site's gateway, not a company's admins.
+HOSTED_BLOCKED = {"/api/console/devices", "/api/check-port", "/api/restart", "/api/tiles/clear",
+                  "/api/setup", "/setup", "/setup/", "/api/app/upload", "/api/app", "/api/lcd"}
 PRIVATE_EVENTS = {"audit", "settings"}       # only administrators see these in the activity log
 
 
@@ -357,6 +362,9 @@ def make_handler(app):
         def _gate(self, p):
             """Sign-in check. Returns True if the request may continue."""
             self.user = None
+            if app.hosted and p in HOSTED_BLOCKED:
+                self._json({"error": "Not available on the hosted service"}, 404)
+                return False
             if p.startswith("/static/") or p in PUBLIC:
                 return True
             if app.auth.needs_setup():
@@ -484,7 +492,7 @@ def make_handler(app):
             if p == "/api/me":
                 return self._json(app.auth.public(self.user))
             if p == "/api/whatsnew":
-                return self._json(whats_new(self.user, qs.get("all", ["0"])[0] == "1"))
+                return self._json(whats_new(self.user, qs.get("all", ["0"])[0] == "1", app.hosted))
 
             if not self._need("view"):
                 return
@@ -644,7 +652,7 @@ def make_handler(app):
                 return self._export(qs) if self._need("export") else None
 
             if p == "/api/settings":
-                return self._json(config_mod.public(cfg)) if self._need("settings") else None
+                return self._json(dict(config_mod.public(cfg), hosted=app.hosted)) if self._need("settings") else None
             if p == "/api/system":
                 return self._json(self._system()) if self._need("settings") else None
             if p == "/api/backup.db":
@@ -835,7 +843,7 @@ def make_handler(app):
                 except config_mod.Invalid as e:
                     return self._json({"error": str(e)}, 400)
                 app.auth.audit(self.user, "changed settings: " + ", ".join(sorted(body.keys())))
-                return self._json({"ok": True, "notes": notes, "settings": config_mod.public(new)})
+                return self._json({"ok": True, "notes": notes, "settings": dict(config_mod.public(new), hosted=app.hosted)})
             if p == "/api/check-port":
                 host = str(body.get("host", app.cfg["web"]["host"]))
                 port = int(body.get("port", 0) or 0)
@@ -909,6 +917,22 @@ def make_handler(app):
 
         # ---- pieces ---------------------------------------------------
         def _system(self):
+            if app.hosted:
+                return self._system_hosted()
+            st = self._system_box()
+            st["uplink"] = app.uplink.info()
+            return st
+
+        def _system_hosted(self):
+            """A company on the hosted service sees its own data and its gateway, not the server."""
+            st = {k: app.stats.get(k) for k in ("frames", "positions", "seq_gaps", "last_frame", "link_up", "link_detail")}
+            st.update({"version": app.VERSION, "mode": "hosted", "hosted": True, "now": app.now(),
+                       "store": app.store.counts(), "poller": app.poller.status(), "voice": app.voice.info(),
+                       "gateway": app.hub.gateway_info(app.slug), "serial_ports": [], "bauds": config_mod.BAUDS,
+                       "listening_ports": [], "tiles": {"files": 0, "bytes": 0}})
+            return st
+
+        def _system_box(self):
             cfg = app.cfg
             db = os.path.join(cfg["data_dir"], "avl.db")
             try:

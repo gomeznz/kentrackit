@@ -1,0 +1,36 @@
+/* ASI's page for the hosted service: companies, gateway keys, support sessions */
+body.hub-in #wall { display: none; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.card-head h2 { margin: 0; }
+button.primary-btn { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.primary-btn:hover { filter: brightness(1.08); }
+
+.co-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.co { border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; background: var(--bg); }
+.co.off { opacity: .6; }
+.co-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.co-name { font-weight: 650; font-size: 14.5px; }
+.co-slug { font: 12px var(--mono); color: var(--muted); }
+.co-acts { margin-left: auto; display: flex; gap: 6px; }
+.co-stats { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.co-stats b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.gw { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.gw .led { width: 9px; height: 9px; border-radius: 50%; background: var(--lost); flex: none; }
+.gw.on .led { background: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent); }
+.gw.down .led { background: var(--busy); }
+.gw.radio-off .led { background: var(--stale); }
+.co .alerts { color: var(--busy); font-weight: 600; }
+.co .sub-form { margin-top: 12px; background: var(--panel); }
+.co-empty { color: var(--muted); text-align: center; padding: 18px; border: 1px dashed var(--line); border-radius: 9px; }
+
+.keybox { border: 1px solid var(--live); background: color-mix(in srgb, var(--live) 8%, var(--panel));
+          border-radius: 9px; padding: 14px; margin: 12px 0; }
+.keybox h3 { margin-top: 0; color: var(--live); }
+.keybox .kv { display: grid; grid-template-columns: 120px 1fr auto; gap: 8px; align-items: center; margin-bottom: 6px; font-size: 13px; }
+.keybox .kv .k { color: var(--muted); font-size: 12px; }
+.keybox code { font-size: 12.5px; padding: 4px 6px; overflow-wrap: anywhere; user-select: all; }
+@media (max-width: 600px) {
+  .keybox .kv { grid-template-columns: 1fr auto; }
+  .keybox .kv .k { grid-column: 1 / -1; }
+  .co-acts { margin-left: 0; width: 100%; }
+}

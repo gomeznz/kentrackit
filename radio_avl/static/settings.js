@@ -87,6 +87,38 @@
   $("tile-source").onchange = showTileFields;
   $("sat-source").onchange = showTileFields;
 
+  // ---- hosted service (a Pi sending to it, or a company on it) ----------------------------
+  function fillUplink() {
+    const U = S.uplink;
+    if (!U) return;
+    $("up-on").checked = U.enabled; $("up-url").value = U.url || "";
+    $("up-key").value = ""; $("up-key").placeholder = U.token_set ? "key saved; paste a new one to replace" : "gw_… (from ASI)";
+  }
+  function fillUplinkStatus() {
+    const u = SYS.uplink;
+    if (!u) return;
+    const label = { off: "Off", connecting: "Connecting…", connected: "Connected", error: "Can't reach the service",
+                    refused: "The service refused this gateway key" }[u.state] || u.state;
+    $("up-st").textContent = label + (u.detail && u.state !== "connected" ? ` (${u.detail})` : "");
+    $("up-st").className = u.state === "connected" ? "ok-text" : (u.state === "error" || u.state === "refused") ? "bad-text" : "";
+    $("up-co").textContent = u.company || "–";
+    $("up-last").textContent = u.last_ok ? ago(u.last_ok, SYS.now) : "never";
+    $("up-backlog").textContent = u.backlog ? `${u.backlog.toLocaleString()} radio messages (sent when the service is reachable)` : "nothing";
+  }
+  function fillGateway() {
+    const g = SYS.gateway;
+    if (!g) return;
+    $("gw-st").textContent = g.online ? "Online" : g.last ? "Offline" : "Not connected yet";
+    $("gw-st").className = g.online ? "ok-text" : "bad-text";
+    $("gw-last").textContent = g.last ? ago(g.last, SYS.now) + (g.ip ? ` from ${g.ip}` : "") : "never";
+    const l = g.link || {};
+    $("gw-radio").textContent = g.last ? (l.up ? "Connected" : "Not connected") + (l.detail ? ` (${l.detail})` : "") : "–";
+    $("gw-radio").className = g.last ? (l.up ? "ok-text" : "bad-text") : "";
+    $("gw-backlog").textContent = g.backlog ? `${g.backlog.toLocaleString()} radio messages` : "nothing";
+    $("gw-ver").textContent = g.version || "–";
+    $("gw-key").textContent = g.key_hint ? `ends in …${g.key_hint} (ASI issues and replaces it)` : "–";
+  }
+
   function fillDisplay() {
     $("disp-stale").value = S.display.stale_after_s;
     $("disp-lost").value = Math.round(S.display.lost_after_s / 60);
@@ -270,6 +302,7 @@
   // ---- status ----------------------------------------------------------
   function fillStatus() {
     const s = SYS;
+    fillUplinkStatus(); fillGateway();
     $("st-link").innerHTML = "";
     const span = document.createElement("span");
     span.className = s.link_up ? "ok-text" : "bad-text";
@@ -301,7 +334,7 @@
     $("sys-data").textContent = s.data_dir;
 
     const w = [];
-    if (!s.config_writable) w.push(`The service can't write ${s.config_path}, so changes won't be kept. Re-run install.sh.`);
+    if (!s.hosted && !s.config_writable) w.push(`The service can't write ${s.config_path}, so changes won't be kept. Re-run install.sh.`);
     $("warn").hidden = !w.length; $("warn").textContent = w.join(" ");
   }
 
@@ -372,10 +405,12 @@
       port: $("serial-port").value === "__custom" ? $("serial-custom").value.trim() : $("serial-port").value,
       baud: +$("serial-baud").value } }),
     web: () => {
+      if (S.hosted) return { web: { title: $("web-title").value } };
       return { web: { title: $("web-title").value, port: +$("web-port").value, host: $("web-host").value,
                       https_port: +$("web-https").value || 0 } };
     },
     map: () => {
+      if (S.hosted) return pendingView ? { map: pendingView } : {};
       const t = { source: $("tile-source").value, custom_url: $("tile-url").value,
                   custom_attribution: $("tile-attr").value, max_zoom: +$("tile-maxzoom").value };
       t.satellite = $("sat-source").value;
@@ -404,6 +439,11 @@
         max_talk_s: +$("cn-max").value, talk_over_busy: $("cn-over").checked, ptt_lead_ms: +$("cn-lead").value, ptt_tail_ms: +$("cn-tail").value };
       if ($("cn-apass").value) c.sip_auth_password = $("cn-apass").value;
       return { console: c };
+    },
+    uplink: () => {
+      const u = { enabled: $("up-on").checked, url: $("up-url").value.trim() };
+      if ($("up-key").value.trim()) u.token = $("up-key").value.trim();
+      return { uplink: u };
     },
     mobile: () => ({ mobile: { tracking: $("mo-track").checked, interval_s: +$("mo-int").value } }),
     lcd: () => ({ lcd: { enabled: $("lcd-on").checked, bus: +$("lcd-bus").value, address: $("lcd-addr").value.trim(),
@@ -563,7 +603,7 @@
   setInterval(() => { if (!$("cap-stop").hidden) loadCaptures(); }, 5000);
 
   // ---- load ----------------------------------------------------------------------
-  function fillAll() { fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillVoice(); fillConsole(); fillMobile(); fillLcd(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
+  function fillAll() { document.body.classList.toggle("hosted", !!S.hosted); fillUplink(); fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillVoice(); fillConsole(); fillMobile(); fillLcd(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
   async function refresh() {
     try { SYS = await api("/api/system"); fillStatus(); } catch (e) { /* offline briefly */ }
   }

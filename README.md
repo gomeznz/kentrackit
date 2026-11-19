@@ -187,6 +187,20 @@ To announce an update: add a release at the top of `radio_avl/whatsnew.json` and
 `radio_avl/main.py` to match. Items with `"perm": "settings"` (or `listen`, `reports`...) only show to
 users who can use that feature. A brand-new user only sees the latest release, not the whole history.
 
+## Hosted service (many companies on one server)
+
+`radio_avl/hub.py` runs KenTrackIt for many companies on one server, each with its own database,
+users and settings. Each site's Pi becomes that company's **gateway**: under **Settings → Hosted
+service** it sends the radio's data up with the company's gateway key, keeping it on disk while the
+internet is down. ASI adds companies, issues gateway keys and opens support sessions at `/hub`.
+
+Install it on a server or VM with `sudo ./install-hub.sh`, then follow [docs/hosted.md](docs/hosted.md)
+(Cloudflare address, first company, connecting a Pi, backups). Voice recording and talk-back still run
+on the site's Pi for now.
+
+To try it on a PC: `python3 -m radio_avl.hub --data /tmp/hub --port 8100`, open
+`http://localhost:8100/hub`, add a company, then point a test box (`--replay` works) at it.
+
 ## Files
 
 | Path | What |
@@ -195,6 +209,7 @@ users who can use that feature. A brand-new user only sees the latest release, n
 | `/etc/radio-avl/config.json` | Settings |
 | `/var/lib/radio-avl/avl.db` | History (SQLite). Back this up |
 | `/var/lib/radio-avl/tiles/` | Cached map tiles |
+| `/var/lib/radio-avl/uplink-spool.jsonl` | Radio data waiting for the hosted service (only while it's unreachable) |
 
 ## Testing without the radio
 

@@ -185,8 +185,13 @@ class AlertEngine:
         if not mins:
             return
         now = self.app.now()
+        # hosted: while the site's gateway is offline or still sending what it kept, radios can't be
+        # heard here at all, so "overdue" would be wrong for every unit (phones still count)
+        radios_quiet = self.app.hosted and not self.app.hub.gateway_current(self.app.slug)
         for u in self.app.store.units():
             if not u["last_seen"] or now - u["last_seen"] < mins * 60:
+                continue
+            if radios_quiet and not u["id"].startswith("PH"):
                 continue
             with self.lock:
                 st = self._st(u["id"])
