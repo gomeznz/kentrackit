@@ -29,14 +29,15 @@ import sqlite3
 import sys
 import threading
 import time
-from urllib.parse import urlparse, quote
+from urllib.parse import urlparse, quote, parse_qs
 
 from . import appdist
+from . import billing
 from . import config as config_mod
 from .appdist import AppStore
 from .auth import Auth, AuthError, SUPPORT_USER, _h
 from .store import Store
-from .web import TileCache, make_handler, _Server
+from .web import TileCache, make_handler, _Server, _SafeCSV
 
 log = logging.getLogger("radio-avl")
 
@@ -67,7 +68,29 @@ CREATE TABLE IF NOT EXISTS companies (
     gw_info TEXT DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS hub_settings (key TEXT PRIMARY KEY, value TEXT);
+-- what a company pays, from a month on (plan NULL = no charge from that month)
+CREATE TABLE IF NOT EXISTS rates (
+    id INTEGER PRIMARY KEY,
+    slug TEXT NOT NULL,
+    start_month TEXT NOT NULL,
+    plan TEXT,
+    set_by TEXT,
+    set_at REAL,
+    UNIQUE (slug, start_month)
+);
+-- what each company used each month; kept even when the company's own history is pruned
+CREATE TABLE IF NOT EXISTS usage (
+    slug TEXT NOT NULL,
+    month TEXT NOT NULL,
+    radio_ids TEXT DEFAULT '[]',
+    phone_ids TEXT DEFAULT '[]',
+    users INTEGER DEFAULT 0,
+    updated REAL,
+    final INTEGER DEFAULT 0,
+    PRIMARY KEY (slug, month)
+);
 """
+BILLING_DEFAULTS = {"currency": "NZD", "gst_pct": 15.0}
 
 
 class HubError(Exception):
@@ -423,7 +446,14 @@ class Hub:
         return bool(g and g["online"] and not g.get("backlog"))
 
     def housekeeping(self):
+        last_billing = 0
         while not self.stop.wait(10):
+            if time.time() - last_billing > 900:
+                try:
+                    self.billing_housekeeping()
+                except Exception as e:
+                    log.warning("hub billing: %s", e)
+                last_billing = time.time()
             try:
                 for r in self.rows():
                     app = self.companies.get(r["slug"])
@@ -435,6 +465,166 @@ class Hub:
             except Exception as e:
                 log.warning("hub housekeeping: %s", e)
 
+    # ---- billing -------------------------------------------------------------------------------------
+    def billing_cfg(self):
+        with self.lock:
+            r = self.db.execute("SELECT value FROM hub_settings WHERE key='billing'").fetchone()
+        return dict(BILLING_DEFAULTS, **(json.loads(r[0]) if r else {}))
+
+    def set_billing_cfg(self, data, actor):
+        cur = self.billing_cfg()
+        cur_code = str(data.get("currency", cur["currency"])).strip().upper()
+        if not re.fullmatch(r"[A-Z]{3}", cur_code):
+            raise HubError("Currency: a 3-letter code such as NZD")
+        try:
+            gst = round(float(data.get("gst_pct", cur["gst_pct"])), 3)
+        except (TypeError, ValueError):
+            raise HubError("GST must be a percentage")
+        if not 0 <= gst <= 50:
+            raise HubError("GST must be between 0 and 50 %")
+        new = {"currency": cur_code, "gst_pct": gst}
+        with self.lock, self.db:
+            self.db.execute("INSERT INTO hub_settings VALUES ('billing', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                            (json.dumps(new),))
+        if new != cur:
+            self.audit(actor, f"billing settings: {cur_code}, GST {gst:g} %")
+        return new
+
+    def rates(self, slug):
+        """All of a company's plans, oldest first: [{id, start_month, plan, set_by, set_at}]."""
+        with self.lock:
+            rows = self.db.execute("SELECT id, start_month, plan, set_by, set_at FROM rates WHERE slug=? "
+                                   "ORDER BY start_month", (slug,)).fetchall()
+        return [dict(r, plan=json.loads(r["plan"]) if r["plan"] else None) for r in rows]
+
+    def rate_for(self, slug, month):
+        """-> (plan or None, start month or None) in force for that month."""
+        best = (None, None)
+        for r in self.rates(slug):
+            if r["start_month"] <= month:
+                best = (r["plan"], r["start_month"])
+        return best
+
+    def set_rate(self, slug, start_month, plan, actor):
+        if not self.row(slug):
+            raise HubError("No such company")
+        try:
+            start_month = billing.check_month(start_month)
+            plan = billing.validate_plan(plan)
+        except billing.Invalid as e:
+            raise HubError(str(e))
+        current = billing.month_of(time.time())
+        with self.lock:
+            done = self.db.execute("SELECT 1 FROM usage WHERE slug=? AND month=? AND final=1", (slug, start_month)).fetchone()
+        if start_month < current and done:
+            raise HubError(f"{start_month} is already closed; a new rate can start this month or later")
+        with self.lock, self.db:
+            self.db.execute("INSERT INTO rates (slug, start_month, plan, set_by, set_at) VALUES (?,?,?,?,?) "
+                            "ON CONFLICT(slug, start_month) DO UPDATE SET plan=excluded.plan, set_by=excluded.set_by, "
+                            "set_at=excluded.set_at", (slug, start_month, json.dumps(plan) if plan else None, actor, time.time()))
+        cur = self.billing_cfg()["currency"]
+        self.audit(actor, f"rate for {slug} from {start_month}: {billing.describe(plan, cur)}")
+        app = self.companies.get(slug)
+        if app:
+            app.store.add_event("audit", f"ASI: rate from {start_month}: {billing.describe(plan, cur)}")
+        return self.rates(slug)
+
+    def delete_rate(self, slug, rate_id, actor):
+        current = billing.month_of(time.time())
+        with self.lock:
+            r = self.db.execute("SELECT start_month FROM rates WHERE id=? AND slug=?", (rate_id, slug)).fetchone()
+        if not r:
+            raise HubError("No such rate")
+        if r[0] <= current:
+            raise HubError("That rate is already in use; set a new one from a later month instead")
+        with self.lock, self.db:
+            self.db.execute("DELETE FROM rates WHERE id=?", (rate_id,))
+        self.audit(actor, f"removed the rate for {slug} that was to start {r[0]}")
+
+    def update_usage(self, slug, month=None, final=False):
+        """Bring a company's usage for a month up to date (this month unless given)."""
+        app = self.companies.get(slug)
+        month = month or billing.month_of(time.time())
+        with self.lock:
+            r = self.db.execute("SELECT * FROM usage WHERE slug=? AND month=?", (slug, month)).fetchone()
+        if r and r["final"]:
+            return
+        radios = set(json.loads(r["radio_ids"])) if r else set()
+        phones = set(json.loads(r["phone_ids"])) if r else set()
+        users = r["users"] if r else 0
+        if app:
+            got_r, got_p = billing.usage_from(app, month)
+            radios |= got_r                  # union: the company may prune its history during the month
+            phones |= got_p
+            if month == billing.month_of(time.time()):
+                users = max(users, len([u for u in app.auth.users()
+                                        if u["enabled"] and u["username"].lower() != SUPPORT_USER]))
+        with self.lock, self.db:
+            self.db.execute(
+                "INSERT INTO usage (slug, month, radio_ids, phone_ids, users, updated, final) VALUES (?,?,?,?,?,?,?) "
+                "ON CONFLICT(slug, month) DO UPDATE SET radio_ids=excluded.radio_ids, phone_ids=excluded.phone_ids, "
+                "users=excluded.users, updated=excluded.updated, final=excluded.final",
+                (slug, month, json.dumps(sorted(radios)), json.dumps(sorted(phones)), users, time.time(), int(final)))
+
+    def usage(self, slug, month):
+        with self.lock:
+            r = self.db.execute("SELECT * FROM usage WHERE slug=? AND month=?", (slug, month)).fetchone()
+        if not r:
+            return {"radios": 0, "phones": 0, "users": 0, "radio_ids": [], "phone_ids": [], "final": False}
+        ri, ph = json.loads(r["radio_ids"]), json.loads(r["phone_ids"])
+        return {"radios": len(ri), "phones": len(ph), "users": r["users"], "radio_ids": ri, "phone_ids": ph,
+                "final": bool(r["final"]), "updated": r["updated"]}
+
+    def statement(self, slug, month, refresh=True):
+        row = self.row(slug)
+        if not row:
+            raise HubError("No such company")
+        if refresh and month == billing.month_of(time.time()):
+            self.update_usage(slug, month)
+        plan, start = self.rate_for(slug, month)
+        cfg = self.billing_cfg()
+        use = self.usage(slug, month)
+        st = billing.statement(plan, use, cfg["gst_pct"])
+        st.update(month=month, slug=slug, company=row["name"], plan=plan, plan_from=start, usage=use,
+                  plan_text=billing.describe(plan, cfg["currency"]), currency=cfg["currency"], gst_pct=cfg["gst_pct"],
+                  final=use["final"], to_date=month == billing.month_of(time.time()))
+        return st
+
+    def statements(self, month):
+        return [self.statement(r["slug"], month) for r in self.rows()]
+
+    def company_billing(self, slug):
+        """For a company's own administrators: their rate, this month so far and past months."""
+        now_m = billing.month_of(time.time())
+        rates = self.rates(slug)
+        if not rates:
+            return {"enabled": False}
+        plan, start = self.rate_for(slug, now_m)
+        cfg = self.billing_cfg()
+        past = []
+        for i in range(1, 13):
+            m = billing.add_months(now_m, -i)
+            if m < rates[0]["start_month"]:
+                break
+            st = self.statement(slug, m, refresh=False)
+            if st["plan"] or st["total"]:
+                past.append(st)
+        return {"enabled": True, "currency": cfg["currency"], "gst_pct": cfg["gst_pct"],
+                "plan": plan, "plan_from": start, "plan_text": billing.describe(plan, cfg["currency"]),
+                "scheduled": [dict(r, plan_text=billing.describe(r["plan"], cfg["currency"])) for r in rates if r["start_month"] > now_m],
+                "current": self.statement(slug, now_m), "past": past}
+
+    def billing_housekeeping(self):
+        """Keep this month's usage current, and close last month once it's over."""
+        now_m = billing.month_of(time.time())
+        prev = billing.add_months(now_m, -1)
+        for r in self.rows():
+            self.update_usage(r["slug"], now_m)
+            with self.lock:
+                p = self.db.execute("SELECT final FROM usage WHERE slug=? AND month=?", (r["slug"], prev)).fetchone()
+            if p is not None and not p[0]:
+                self.update_usage(r["slug"], prev, final=True)
+
     # ---- overview for ASI ------------------------------------------------------------------------
     def overview(self):
         out = []
@@ -442,6 +632,9 @@ class Hub:
             app = self.companies.get(r["slug"])
             c = {k: r[k] for k in ("slug", "name", "created", "enabled", "domains", "notes", "token_hint")}
             c["gateway"] = self.gateway_info(r["slug"])
+            st = self.statement(r["slug"], billing.month_of(time.time()), refresh=False)
+            c["billing"] = {"plan_text": st["plan_text"] if st["plan"] else "", "to_date": st["total"],
+                            "currency": st["currency"]}
             if app:
                 counts = app.store.counts()
                 users = app.auth.users()
@@ -687,6 +880,32 @@ def make_hub_handler(hub):
                 return self._json({"error": str(e)}, 400)
 
         def _hub_api(self, method, api, body, who):
+            qs = parse_qs(urlparse(self.path).query)
+            mb = re.match(r"^/companies/([a-z0-9-]{2,30})/rates(?:/(\d{1,9}))?$", api)
+            if mb:
+                slug = mb.group(1)
+                if method == "GET":
+                    return self._json({"rates": hub.rates(slug), "currency": hub.billing_cfg()["currency"]})
+                if method == "POST":
+                    return self._json({"rates": hub.set_rate(slug, body.get("start_month"), body.get("plan"), who)})
+                if method == "DELETE" and mb.group(2):
+                    hub.delete_rate(slug, int(mb.group(2)), who)
+                    return self._json({"ok": True})
+            if api in ("/billing", "/billing.csv") and method == "GET":
+                month = qs.get("month", [billing.month_of(time.time())])[0]
+                try:
+                    billing.check_month(month)
+                except billing.Invalid as e:
+                    raise HubError(str(e))
+                sts = hub.statements(month)
+                if api == "/billing.csv":
+                    return self._billing_csv(month, sts)
+                return self._json({"month": month, "current": billing.month_of(time.time()),
+                                   "statements": sts, **hub.billing_cfg()})
+            if api == "/billing/settings":
+                if method == "POST":
+                    return self._json(hub.set_billing_cfg(body, who))
+                return self._json(hub.billing_cfg())
             m = re.match(r"^/companies/([a-z0-9-]{2,30})(/token|/support)?$", api)
             if method == "GET" and api == "/companies":
                 return self._json({"companies": hub.overview()})
@@ -732,6 +951,23 @@ def make_hub_handler(hub):
             if method == "GET" and api == "/activity":
                 return self._json([e for e in hub.core.store.events(300) if e["kind"] == "audit"])
             return self._send(404, "Not found", "text/plain")
+
+        def _billing_csv(self, month, sts):
+            out = io.StringIO()
+            w = _SafeCSV(out)                   # names typed into the page can't run as spreadsheet formulas
+            w.writerow(["month", "company", "short_name", "item", "detail", "qty", "price", "amount",
+                        "subtotal", "gst", "total", "currency", "final", "plan", "radios"])
+            for st in sts:
+                if not st["plan"] and not st["total"]:
+                    continue
+                common = [st["subtotal"], st["gst"], st["total"], st["currency"], "yes" if st["final"] else "to date"]
+                for ln in st["lines"] or [{"item": "", "detail": "", "qty": "", "price": "", "amount": 0}]:
+                    w.writerow([month, st["company"], st["slug"], ln["item"], ln["detail"], ln["qty"], ln["price"],
+                                f"{ln['amount']:.2f}" if ln["amount"] != "" else ""] +
+                               [f"{common[0]:.2f}", f"{common[1]:.2f}", f"{common[2]:.2f}"] + common[3:] +
+                               [st["plan_text"], " ".join(st["usage"]["radio_ids"])])
+            name = f"kentrackit_billing_{month}.csv"
+            self._send(200, out.getvalue(), "text/csv", {"Content-Disposition": f'attachment; filename="{name}"'})
 
         def _hub_app_upload(self, who):
             n = int(self.headers.get("Content-Length", 0) or 0)

@@ -230,3 +230,71 @@ def test_no_overdue_alerts_while_the_gateway_is_offline():
     finally:
         hub.shutdown()
         srv.shutdown()
+
+
+def test_billing():
+    from radio_avl import billing
+    hub, srv, base, asi = make_hub()
+    try:
+        tok = add(asi, "Council", "council", "cadmin", "council123")
+        add(asi, "Acme", "acme", "aadmin", "acme12345")               # no rate: never charged
+        this = billing.month_of(time.time())
+        nxt = billing.add_months(this, 1)
+        plan = {"flat": 50, "radio": [{"upto": 2, "price": 20}, {"price": 15}], "user": [{"price": 2.5}], "phone": [{"price": 5}]}
+        assert asi("POST", "/hub/api/companies/council/rates", {"start_month": this, "plan": plan})[0] == 200
+        bad = asi("POST", "/hub/api/companies/council/rates", {"start_month": this, "plan": {"radio": [{"upto": 5, "price": 1}, {"upto": 3, "price": 1}, {"price": 1}]}})
+        assert bad[0] == 400 and "higher" in bad[1]["error"]
+        now = time.time()
+        post_gw(base, tok, [[i + 1, now, frame(u, "4624.0000", i).hex()] for i, u in enumerate(["U00101", "U00102", "U00103"])])
+        c = Client(base)
+        c("POST", "/api/login", {"username": "cadmin", "password": "council123"})
+        c("POST", "/api/users", {"username": "viewer1", "password": "viewer12345", "role": "viewer"})
+        c("POST", "/api/mobile/position", {"lat": -46.4, "lon": 168.35})               # a phone
+        # 3 radios: 2 x 20 + 1 x 15; 2 users x 2.50; 1 phone x 5; + 50 = 115, GST 17.25
+        st = asi("GET", "/hub/api/billing?month=" + this)[1]
+        council = next(x for x in st["statements"] if x["slug"] == "council")
+        acme = next(x for x in st["statements"] if x["slug"] == "acme")
+        assert council["usage"]["radios"] == 3 and council["usage"]["users"] == 2 and council["usage"]["phones"] == 1
+        assert (council["subtotal"], council["gst"], council["total"]) == (115.0, 17.25, 132.25)
+        assert acme["total"] == 0 and acme["plan"] is None
+        csv = asi("GET", "/hub/api/billing.csv?month=" + this)[1].decode()
+        assert "Council" in csv and "Acme" not in csv and "U00101 U00102 U00103" in csv
+
+        # a cheaper rate from next month; this month keeps the old one
+        assert asi("POST", "/hub/api/companies/council/rates", {"start_month": nxt, "plan": {"flat": 30}})[0] == 200
+        assert hub.rate_for("council", this)[0]["flat"] == 50 and hub.rate_for("council", nxt)[0]["flat"] == 30
+        # the company sees its own usage and what's coming
+        b = c("GET", "/api/billing")[1]
+        assert b["enabled"] and b["current"]["total"] == 132.25 and b["scheduled"][0]["start_month"] == nxt
+        assert Client(base)("GET", "/api/billing")[0] == 401
+        # removing the scheduled change
+        rid = [r["id"] for r in hub.rates("council") if r["start_month"] == nxt][0]
+        assert asi("DELETE", f"/hub/api/companies/council/rates/{rid}")[0] == 200
+        cur = [r["id"] for r in hub.rates("council")][0]
+        assert asi("DELETE", f"/hub/api/companies/council/rates/{cur}")[0] == 400     # already in use
+
+        # usage is kept when the company prunes its own history
+        hub.update_usage("council")
+        app = hub.app("council")
+        with app.store.lock, app.store.db:
+            app.store.db.execute("DELETE FROM positions")
+        hub.update_usage("council")
+        assert hub.usage("council", this)["radios"] == 3
+        # a closed month doesn't change any more
+        hub.update_usage("council", this, final=True)
+        post_gw(base, tok, [[9, time.time(), frame("U00109", "4624.0000", 9).hex()]])
+        hub.update_usage("council")
+        assert hub.usage("council", this)["radios"] == 3
+    finally:
+        hub.shutdown()
+        srv.shutdown()
+
+
+def test_graduated_tiers():
+    from radio_avl import billing
+    tiers = billing.validate_plan({"radio": [{"upto": 10, "price": 20}, {"upto": 50, "price": 15}, {"price": 10}]})["radio"]
+    assert [(g["qty"], g["price"]) for g in billing.graduated(60, tiers)] == [(10, 20), (40, 15), (10, 10)]
+    assert billing.graduated(0, tiers) == []
+    assert billing.statement(None, {"radios": 5})["total"] == 0
+    s = billing.statement(billing.validate_plan({"radio": [{"price": 0.333}]}), {"radios": 3}, 15)
+    assert s["subtotal"] == 0.99 and s["gst"] == 0.15

@@ -502,6 +502,35 @@
     }, 3000);
   };
 
+  // ---- billing (hosted service) ------------------------------------------------------
+  async function loadBilling() {
+    if (!S.hosted) return;
+    let b;
+    try { b = await api("/api/billing"); } catch (e) { return; }
+    $("bill-card").hidden = !b.enabled;
+    if (!b.enabled) return;
+    const money = (x) => `${b.currency} ${(+x).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const mname = (m) => { const [y, mo] = m.split("-").map(Number); return new Date(y, mo - 1, 1).toLocaleDateString("en-NZ", { month: "long", year: "numeric" }); };
+    $("bl-rate").textContent = b.plan ? b.plan_text + (b.plan.note ? ` (${b.plan.note})` : "") : "No charge";
+    const cur = b.current;
+    $("bl-month-k").textContent = mname(cur.month) + " so far";
+    const n = (k, w) => `${k} ${w}${k === 1 ? "" : "s"}`;
+    $("bl-now").textContent = `${money(cur.total)} incl. GST (${n(cur.usage.radios, "radio")}, ${n(cur.usage.users, "user")}, ${n(cur.usage.phones, "phone")})`;
+    $("bl-sched").hidden = !b.scheduled.length;
+    $("bl-sched").textContent = b.scheduled.map((r) => `From ${mname(r.start_month)}: ${r.plan_text}.`).join(" ");
+    const row = (cells, cls) => { const tr = document.createElement("tr"); if (cls) tr.className = cls;
+      cells.forEach(([t, n]) => { const td = document.createElement("td"); td.textContent = t; if (n) td.className = "n"; tr.appendChild(td); }); return tr; };
+    const tb = $("bl-lines"); tb.replaceChildren();
+    for (const ln of cur.lines) tb.appendChild(row([[ln.item + (ln.detail ? ` (${ln.detail})` : "")], [`${ln.qty} × ${ln.price.toFixed(2)}`, 1], [money(ln.amount), 1]]));
+    if (cur.lines.length) {
+      tb.appendChild(row([[`GST ${cur.gst_pct} %`], ["", 1], [money(cur.gst), 1]]));
+      tb.appendChild(row([["Total so far"], ["", 1], [money(cur.total), 1]], "sum"));
+    }
+    const pt = $("bl-past"); pt.replaceChildren();
+    if (!b.past.length) pt.appendChild(row([["No past months yet"], ["", 1], ["", 1], ["", 1], ["", 1]]));
+    for (const p of b.past) pt.appendChild(row([[mname(p.month)], [String(p.usage.radios), 1], [String(p.usage.users), 1], [String(p.usage.phones), 1], [money(p.total), 1]]));
+  }
+
   // ---- users ----------------------------------------------------------------------
   let USERS = null, ME = null, editing = null;
   const unitLabel = (id) => { const u = USERS.units.find((x) => x.id === id); return u && u.alias ? `${u.alias} (${id})` : id; };
@@ -615,6 +644,6 @@
   fillUnits();
   ME = await api("/api/me");
   $("me-link").textContent = (ME.display_name || ME.username) + " ▾";
-  loadUsers(); loadAudit(); loadCaptures();
+  loadUsers(); loadAudit(); loadCaptures(); loadBilling();
   setInterval(refresh, 5000);
 })();

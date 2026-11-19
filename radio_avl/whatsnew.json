@@ -24,6 +24,13 @@
           "perm": "settings",
           "text": "On the hosted service, Settings shows whether the site's gateway and radio are connected. The radio, recording, display and talk-back settings stay on the site's box.",
           "only": "hosted"
+        },
+        {
+          "icon": "🧾",
+          "title": "Billing",
+          "perm": "settings",
+          "only": "hosted",
+          "text": "Settings → Billing shows your rate, what's been used this month (radios heard, users and phones) and the charges so far, with past months below."
         }
       ]
     },

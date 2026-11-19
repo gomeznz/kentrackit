@@ -74,6 +74,21 @@
     <div id="co-list" class="co-list"></div>
   </section>
 
+  <section class="card" id="bill-card">
+    <div class="card-head"><h2>Billing</h2>
+      <div class="row bill-pick"><input type="month" id="bill-month"><a class="btn" id="bill-csv" href="#">Download CSV</a></div></div>
+    <p class="help">What each company owes for the month, from its rate (set under <b>Manage</b>) and what it used:
+      radios heard that month (a position report or a call), the most users it had at once, and phones that shared
+      their location. The current month is a running total; a month is closed once it's over.</p>
+    <table class="units bill"><thead><tr><th>Company</th><th class="n">Radios</th><th class="n">Users</th><th class="n">Phones</th>
+      <th class="n">Excl. GST</th><th class="n">Total</th></tr></thead><tbody id="bill-rows"></tbody><tfoot id="bill-foot"></tfoot></table>
+    <details class="bill-set"><summary>Currency and GST</summary>
+      <form id="bill-cfg" class="row"><label>Currency <input id="bc-cur" maxlength="3" size="4"></label>
+        <label>GST % <input id="bc-gst" type="number" min="0" max="50" step="0.001"></label><button type="submit">Save</button></form>
+      <p class="help">Rates are entered excluding GST; GST is added on each statement.</p>
+    </details>
+  </section>
+
   <section class="card">
     <h2>Phone app</h2>
     <p class="help">The KenTrackIt Android app for every company on this service. Upload a new <code>KenTrackIt.apk</code>

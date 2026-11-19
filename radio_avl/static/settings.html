@@ -38,6 +38,23 @@
     </div>
   </section>
 
+  <section class="card hosted-only" id="bill-card" hidden>
+    <h2>Billing</h2>
+    <div class="status-grid">
+      <div><span class="k">Your rate</span><span id="bl-rate">–</span></div>
+      <div><span class="k" id="bl-month-k">This month so far</span><span id="bl-now">–</span></div>
+    </div>
+    <p class="help" id="bl-sched" hidden></p>
+    <table class="units bill-lines"><tbody id="bl-lines"></tbody></table>
+    <p class="help">Radios count once a month when they're heard (a position report or a call). Users are the most
+      accounts you had at once during the month; phones are those that shared their location. Prices exclude GST.</p>
+    <h3>Past months</h3>
+    <table class="units bill-lines">
+      <thead><tr><th>Month</th><th class="n">Radios</th><th class="n">Users</th><th class="n">Phones</th><th class="n">Total incl. GST</th></tr></thead>
+      <tbody id="bl-past"></tbody>
+    </table>
+  </section>
+
   <form class="card box-only" data-section="serial">
     <h2>Radio connection</h2>
     <p class="help">The serial adapter the monitor radio is plugged into. Pick the adapter by

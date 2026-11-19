@@ -43,7 +43,12 @@ cd kentrackit
 sudo ./install-hub.sh
 ```
 
-It prints the port (8100 unless something already uses it).
+It prints the port (8100 unless something already uses it). Billing months follow the server's
+clock, so set it to New Zealand time once:
+
+```sh
+sudo timedatectl set-timezone Pacific/Auckland
+```
 
 ## 2. The first ASI administrator
 
@@ -125,7 +130,34 @@ in there.
 - **Manage → Enabled** off: the company's people can't sign in and its gateway is refused.
   Nothing is deleted; tick it again to bring it back.
 
-## 9. Backups
+## 9. Charging companies (optional)
+
+A company is only charged once you give it a rate: **Manage → Charges** on `/hub`. A rate can combine:
+
+| Charge | Counted as |
+|---|---|
+| Monthly fee | once a month |
+| Per radio | each radio heard in the month (a position report or a call), once however often it's heard |
+| Per user | the most enabled sign-in accounts the company had at once in the month (ASI support doesn't count) |
+| Per phone | each phone that shared its location in the month |
+
+Any of the per-item prices can have **tiers**, which work like tax brackets: with radios 1-10 at
+\$18 and 11 and up at \$14, a 13-radio month costs 10 × 18 + 3 × 14.
+
+Each rate starts in a month you choose and stays until the next one. Changing a price for next month
+leaves this month (and every month before) at the old price; a scheduled change can be removed
+until its month begins. **No charge from then** stops charging from a month on. Prices are entered
+excluding GST; set the GST rate and currency under **Billing → Currency and GST** (15 % NZD to start).
+
+**Billing** on `/hub` shows each company's usage and amount for any month, with the line-by-line
+breakdown and the radios that were heard, and **Download CSV** gives the same for invoicing. The
+current month is a running total; when a month ends it's closed and doesn't change. What a company
+used is kept on the service even if the company's own history is set to be kept for a short time.
+
+Each company's administrators see the same figures under **Settings → Billing**: their rate, any
+scheduled change, this month so far, and the past twelve months.
+
+## 10. Backups
 
 Everything is in `/var/lib/kentrackit-hub`: `hub.db` (companies, ASI accounts) and
 `companies/<short name>/avl.db` (each company). A nightly copy:
@@ -146,7 +178,7 @@ sudo chmod +x /etc/cron.daily/kentrackit-hub-backup
 That keeps a week of daily copies. Copy `/var/backups/kentrackit-hub` off the server too (for example
 with Proxmox's own VM backups to another disk).
 
-## 10. Updating
+## 11. Updating
 
 ```sh
 cd kentrackit && git pull && sudo ./install-hub.sh

@@ -79,3 +79,5 @@ details summary { cursor: pointer; font-size: 13px; font-weight: 550; color: var
 /* the hosted service shows a company's own settings, not the server's or the site's hardware */
 body.hosted .box-only { display: none !important; }
 body:not(.hosted) .hosted-only { display: none !important; }
+table.bill-lines td.n, table.bill-lines th.n { text-align: right; font-variant-numeric: tabular-nums; }
+table.bill-lines tr.sum td { font-weight: 650; }

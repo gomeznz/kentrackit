@@ -653,6 +653,10 @@ def make_handler(app):
 
             if p == "/api/settings":
                 return self._json(dict(config_mod.public(cfg), hosted=app.hosted)) if self._need("settings") else None
+            if p == "/api/billing":
+                if not self._need("settings"):
+                    return
+                return self._json(app.hub.company_billing(app.slug) if app.hosted else {"enabled": False})
             if p == "/api/system":
                 return self._json(self._system()) if self._need("settings") else None
             if p == "/api/backup.db":

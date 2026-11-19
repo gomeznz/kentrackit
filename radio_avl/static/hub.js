@@ -15,6 +15,9 @@
   const dur = (s) => s < 60 ? s + " s" : s < 3600 ? Math.floor(s / 60) + " min" : s < 86400 ? Math.floor(s / 3600) + " h" : Math.floor(s / 86400) + " d";
   const ago = (t) => t ? dur(Math.max(0, Math.round(Date.now() / 1000 - t))) + " ago" : "never";
   const when = (t) => t ? new Date(t * 1000).toLocaleString([], { hour12: false }) : "–";
+  const money = (x) => (+x).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const monthName = (m) => { const [y, mo] = m.split("-").map(Number); return new Date(y, mo - 1, 1).toLocaleDateString("en-NZ", { month: "long", year: "numeric" }); };
+  const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
   const bytes = (n) => n < 1048576 ? (n / 1024).toFixed(0) + " KB" : (n / 1048576).toFixed(1) + " MB";
 
   // ---- signed out -------------------------------------------------------------------------
@@ -98,8 +101,9 @@
       if (c.open_alerts) stat("Open alerts", String(c.open_alerts), "alerts");
     }
     if (c.domains.length) stat("Web address", c.domains.join(", "));
+    if (c.billing && c.billing.plan_text) stat("This month so far", `${c.billing.currency} ${money(c.billing.to_date)}`, "bill-line");
     box.appendChild(st);
-    if (open === c.slug) box.appendChild(manageForm(c));
+    if (open === c.slug) { box.appendChild(manageForm(c)); box.appendChild(rateBox(c)); }
     return box;
   }
 
@@ -138,6 +142,172 @@
     };
     return f;
   }
+
+  // ---- a company's rate --------------------------------------------------------------------------
+  const ITEMS = [["radio", "Per radio", "radios"], ["user", "Per user", "users"], ["phone", "Per phone", "phones"]];
+
+  function tierEditor(unit, tiers) {
+    const box = el("div", "tiers");
+    const rows = [];
+    function redraw() {
+      box.replaceChildren();
+      let lo = 1;
+      rows.forEach((r, i) => {
+        const last = i === rows.length - 1;
+        const line = el("div", "tier");
+        const upto = el("input"); upto.type = "number"; upto.min = lo; upto.value = last ? "" : (r.upto ?? "");
+        upto.placeholder = "up to"; upto.onchange = () => { r.upto = upto.value === "" ? null : +upto.value; redraw(); };
+        const price = el("input"); price.type = "number"; price.min = 0; price.step = "0.01"; price.value = r.price ?? ""; price.placeholder = "price";
+        price.oninput = () => { r.price = price.value; };
+        const rng = el("span", "rng", rows.length === 1 ? `Each of the ${unit}` : last ? `${unit} ${lo} and up` : `${unit} ${lo} to`);
+        line.append(rng);
+        if (!last) line.append(upto);
+        line.append(el("span", null, "at"), price, el("span", null, "each"));
+        const rm = el("button", "link", "remove"); rm.type = "button"; rm.onclick = () => { rows.splice(i, 1); redraw(); };
+        line.append(rm);
+        box.appendChild(line);
+        if (!last) lo = (+r.upto || lo) + 1;
+      });
+      const add = el("button", "link", rows.length ? "+ add a price tier" : "+ charge per " + unit.replace(/s$/, ""));
+      add.type = "button";
+      add.onclick = () => {
+        if (rows.length) { const prev = rows[rows.length - 1]; prev.upto = prev.upto || (rows.length > 1 ? (+rows[rows.length - 2].upto || 0) + 10 : 10); }
+        rows.push({ upto: null, price: "" }); redraw();
+      };
+      box.appendChild(add);
+    }
+    for (const t of tiers || []) rows.push({ upto: t.upto, price: t.price });
+    redraw();
+    box.value = () => rows.map((r, i) => ({ upto: i === rows.length - 1 ? null : r.upto, price: r.price === "" ? null : +r.price }));
+    return box;
+  }
+
+  function rateBox(c) {
+    const box = el("div", "sub-form rate-box");
+    box.appendChild(el("h3", null, "Charges"));
+    const hist = el("ul", "rate-hist"); box.appendChild(hist);
+    const form = el("div");
+    box.appendChild(form);
+    (async () => {
+      const { rates, currency } = await api(`/companies/${c.slug}/rates`);
+      const now = thisMonth();
+      const active = rates.filter((r) => r.start_month <= now).pop();
+      if (!rates.length) hist.appendChild(el("li", null, "Not charged: no rate set."));
+      for (const r of rates.slice().reverse()) {
+        const li = el("li");
+        li.append(el("span", "m", "from " + r.start_month));
+        if (r === active) li.append(el("span", "now", "NOW"));
+        if (r.start_month > now) li.append(el("span", "soon", "SCHEDULED"));
+        li.append(el("span", null, describe(r.plan, currency)), el("span", "by", `${r.set_by || ""} ${new Date(r.set_at * 1000).toLocaleDateString()}`));
+        if (r.start_month > now) {
+          const x = el("button", "link", "remove"); x.type = "button";
+          x.onclick = async () => { try { await api(`/companies/${c.slug}/rates/${r.id}`, { method: "DELETE" }); loadCompanies(); } catch (e) { toast(e.message, true); } };
+          li.append(x);
+        }
+        hist.appendChild(li);
+      }
+      const base = (active && active.plan) || {};
+      const f = el("div");
+      f.innerHTML = `
+        <div class="two">
+          <label>New rate starts <input type="month" class="r-from" required></label>
+          <label>Monthly fee (${currency}, excl. GST) <input type="number" class="r-flat" min="0" step="0.01" placeholder="0"></label>
+        </div>`;
+      const from = f.querySelector(".r-from"); from.value = now; from.min = now;
+      f.querySelector(".r-flat").value = base.flat || "";
+      const eds = {};
+      for (const [key, label, unit] of ITEMS) {
+        f.appendChild(el("div", "item-head", label));
+        eds[key] = tierEditor(unit, base[key]); f.appendChild(eds[key]);
+      }
+      const note = el("label"); note.append("Note (shows on the company's statement) ");
+      const ni = el("input"); ni.maxLength = 200; ni.value = base.note || ""; note.appendChild(ni); f.appendChild(note);
+      const acts = el("div", "actions");
+      const off = el("button", "danger", "No charge from then"); off.type = "button";
+      const save = el("button", "primary-btn", "Save rate"); save.type = "button";
+      const send = async (plan) => {
+        try { await post(`/companies/${c.slug}/rates`, { start_month: from.value, plan }); toast(`Rate saved from ${from.value}`); loadCompanies(); loadBilling(); loadActivity(); }
+        catch (e) { toast(e.message, true); }
+      };
+      save.onclick = () => {
+        const plan = { flat: +f.querySelector(".r-flat").value || 0, note: ni.value };
+        for (const [key] of ITEMS) plan[key] = eds[key].value();
+        send(plan);
+      };
+      off.onclick = () => { if (confirm(`Stop charging ${c.name} from ${from.value}?`)) send(null); };
+      acts.append(off, save); f.appendChild(acts);
+      f.appendChild(el("p", "help", "A new rate applies from the start of its month; earlier months keep the rate they had. " +
+        "Tiers are like tax brackets: with 1-10 at 20 and 11 and up at 15, 13 radios cost 10 × 20 + 3 × 15."));
+      form.appendChild(f);
+    })().catch((e) => toast(e.message, true));
+    return box;
+  }
+
+  function describe(plan, cur) {
+    if (!plan) return "No charge";
+    const parts = [];
+    if (plan.flat) parts.push(`${cur} ${money(plan.flat)} a month`);
+    for (const [key, , unit] of ITEMS) {
+      const t = plan[key]; if (!t || !t.length) continue;
+      if (t.length === 1) { parts.push(`${money(t[0].price)} per ${unit.replace(/s$/, "")}`); continue; }
+      let lo = 1; const bits = [];
+      for (const x of t) { bits.push(`${x.upto ? lo + "-" + x.upto : lo + "+"} at ${money(x.price)}`); lo = (x.upto || 0) + 1; }
+      parts.push(`${unit}: ${bits.join(", ")}`);
+    }
+    return parts.join(" + ");
+  }
+
+  // ---- billing ----------------------------------------------------------------------------------------
+  let billOpen = null;
+  async function loadBilling() {
+    const month = $("bill-month").value || thisMonth();
+    const b = await api("/billing?month=" + month);
+    $("bill-csv").href = "/hub/api/billing.csv?month=" + month;
+    $("bc-cur").value = b.currency; $("bc-gst").value = b.gst_pct;
+    const tb = $("bill-rows"); tb.replaceChildren();
+    const charged = b.statements.filter((s) => s.plan || s.total);
+    if (!charged.length) {
+      const tr = el("tr"); const td = el("td", "empty", `Nobody is charged for ${monthName(month)}. Set a rate under Manage.`); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr);
+    }
+    let sub = 0, tot = 0;
+    for (const s of charged) {
+      sub += s.subtotal; tot += s.total;
+      const tr = el("tr", "co-bill");
+      const nm = el("td"); nm.append(el("div", "uname", s.company), el("div", "usub", s.plan_text));
+      tr.append(nm, el("td", "n", String(s.usage.radios)), el("td", "n", String(s.usage.users)), el("td", "n", String(s.usage.phones)),
+                el("td", "n", money(s.subtotal)), el("td", "n", money(s.total)));
+      tr.onclick = () => { billOpen = billOpen === s.slug ? null : s.slug; loadBilling(); };
+      tb.appendChild(tr);
+      if (billOpen === s.slug) {
+        const lr = el("tr", "lines"); const td = el("td"); td.colSpan = 6;
+        const t = el("table");
+        for (const ln of s.lines) {
+          const r = el("tr");
+          r.append(el("td", null, ln.item + (ln.detail ? ` (${ln.detail})` : "")), el("td", "n", `${ln.qty} × ${money(ln.price)}`), el("td", "n", money(ln.amount)));
+          t.appendChild(r);
+        }
+        const g = el("tr"); g.append(el("td", null, `GST ${s.gst_pct} %`), el("td"), el("td", "n", money(s.gst))); t.appendChild(g);
+        td.appendChild(t);
+        if (s.usage.radio_ids.length) td.appendChild(el("p", "help", "Radios heard: " + s.usage.radio_ids.join(", ")));
+        lr.appendChild(td); tb.appendChild(lr);
+      }
+    }
+    const foot = $("bill-foot"); foot.replaceChildren();
+    if (charged.length) {
+      const tr = el("tr");
+      const lbl = el("td"); lbl.append(`Total ${b.currency}`); if (month === b.current) lbl.append(" ", el("span", "to-date", "(month so far)"));
+      const e1 = el("td"); e1.colSpan = 3;
+      tr.append(lbl, e1, el("td", "n", money(sub)), el("td", "n", money(tot))); foot.appendChild(tr);
+    }
+  }
+  $("bill-month").value = thisMonth();
+  $("bill-month").max = thisMonth();
+  $("bill-month").onchange = () => { billOpen = null; loadBilling(); };
+  $("bill-cfg").onsubmit = async (ev) => {
+    ev.preventDefault();
+    try { await post("/billing/settings", { currency: $("bc-cur").value.trim(), gst_pct: +$("bc-gst").value }); toast("Saved"); loadBilling(); loadActivity(); }
+    catch (e) { toast(e.message, true); }
+  };
 
   function showKey(name, token) {
     $("kb-title").textContent = `Gateway key for ${name}`;
@@ -251,6 +421,6 @@
     }
   }
 
-  loadCompanies(); loadApk(); loadSettings(); loadAdmins(); loadActivity();
+  loadCompanies(); loadBilling().catch((e) => toast(e.message, true)); loadApk(); loadSettings(); loadAdmins(); loadActivity();
   setInterval(() => { if (!open && $("co-add").hidden) loadCompanies().catch(() => {}); }, 10000);
 })();

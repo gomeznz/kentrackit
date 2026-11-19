@@ -34,3 +34,33 @@ button.primary-btn:hover { filter: brightness(1.08); }
   .keybox .kv .k { grid-column: 1 / -1; }
   .co-acts { margin-left: 0; width: 100%; }
 }
+
+/* billing */
+.bill-pick { margin: 0; }
+.bill-pick input { width: auto; }
+table.bill th.n, table.bill td.n { text-align: right; font-variant-numeric: tabular-nums; }
+table.bill tr.co-bill { cursor: pointer; }
+table.bill tr.co-bill:hover td { background: var(--bg); }
+table.bill tr.co-bill td:first-child .usub { font-size: 12px; color: var(--muted); }
+table.bill tr.lines td { background: var(--bg); font-size: 12.5px; padding: 8px 10px; }
+table.bill tr.lines table { width: 100%; border-collapse: collapse; }
+table.bill tr.lines table td { padding: 2px 4px; border: 0; background: none; }
+table.bill tfoot td { font-weight: 650; border-top: 2px solid var(--line); }
+table.bill .to-date { color: var(--muted); font-weight: 400; font-size: 11.5px; }
+.bill-set { margin-top: 12px; font-size: 13px; }
+.bill-set summary { cursor: pointer; color: var(--muted); }
+.bill-set form { margin-top: 8px; gap: 12px; align-items: flex-end; }
+.bill-set label { margin: 0; font-size: 12.5px; }
+.rate-box { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.rate-hist { list-style: none; padding: 0; margin: 4px 0 10px; font-size: 12.5px; }
+.rate-hist li { display: flex; gap: 10px; align-items: baseline; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.rate-hist .m { font-family: var(--mono); white-space: nowrap; }
+.rate-hist .now { color: var(--live); font-weight: 600; font-size: 11.5px; }
+.rate-hist .soon { color: var(--stale); font-weight: 600; font-size: 11.5px; }
+.rate-hist .by { color: var(--muted); margin-left: auto; white-space: nowrap; }
+.tiers { margin: 2px 0 10px; }
+.tiers .tier { display: flex; align-items: center; gap: 6px; font-size: 12.5px; margin-bottom: 4px; flex-wrap: wrap; }
+.tiers .tier input { width: 84px; padding: 3px 6px; }
+.tiers .tier .rng { min-width: 92px; color: var(--muted); }
+.item-head { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; margin-top: 8px; }
+.co .bill-line { color: var(--ink); }
