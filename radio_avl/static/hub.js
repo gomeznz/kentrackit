@@ -121,7 +121,15 @@
         <div><span class="k">Created</span><span class="cr"></span></div>
         <div><span class="k">Data folder</span><span class="df"></span></div>
       </div>
-      <div class="actions"><button type="button" class="nk danger">New gateway key</button><button type="submit">Save</button></div>`;
+      <div class="actions"><button type="button" class="nk danger">New gateway key</button><button type="submit">Save</button></div>
+      <h3>History from a KenTrackIt box</h3>
+      <p class="help">Bring in what the site's box recorded before it was connected here: units, positions, calls,
+        alerts, zones and user accounts (with their passwords). On the box, use <b>Settings → Download backup</b>, then
+        choose that file here. Only history from before this company's hosted data starts is added, so doing it twice
+        adds nothing. Recordings stay on the box. Files over 100 MB need the server's own network address
+        (Cloudflare limits uploads).</p>
+      <div class="row"><input type="file" class="imp-file" accept=".db"><button type="button" class="imp">Import</button></div>
+      <p class="help imp-out" hidden></p>`;
     f.name.value = c.name; f.domains.value = c.domains.join(", "); f.notes.value = c.notes || ""; f.enabled.checked = c.enabled;
     const g = c.gateway || {};
     f.querySelector(".gk").textContent = c.token_hint ? `ends in …${c.token_hint}` : "–";
@@ -134,6 +142,24 @@
       try { await post(`/companies/${c.slug}`, { name: f.name.value, domains: f.domains.value, notes: f.notes.value, enabled: f.enabled.checked });
             toast("Saved"); open = null; loadCompanies(); loadActivity(); }
       catch (e) { toast(e.message, true); }
+    };
+    f.querySelector(".imp").onclick = async () => {
+      const file = f.querySelector(".imp-file").files[0];
+      if (!file) return toast("Choose the backup file from the box first", true);
+      if (!confirm(`Import ${file.name} (${bytes(file.size)}) into ${c.name}?`)) return;
+      const b = f.querySelector(".imp"), out = f.querySelector(".imp-out");
+      b.disabled = true; b.textContent = "Importing…"; out.hidden = true;
+      try {
+        const r = await api(`/companies/${c.slug}/import`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file });
+        const n = (x) => (+x).toLocaleString();
+        let txt = `Imported ${n(r.positions)} positions, ${n(r.calls)} calls, ${n(r.alerts)} alerts and ${n(r.coverage)} coverage points; ` +
+                  `${r.units_new} new units, ${r.units_merged} merged; ${r.zones_new} zones added` + (r.zones_same ? ` (${r.zones_same} already here)` : "") + ".";
+        if (r.users_new.length) txt += ` Users added (same passwords as on the box): ${r.users_new.join(", ")}.`;
+        if (r.users_skipped.length) txt += ` Users not added: ${r.users_skipped.join(", ")}.`;
+        out.textContent = txt; out.hidden = false;
+        f.querySelector(".imp-file").value = ""; loadActivity();
+      } catch (e) { toast(e.message, true); }
+      b.disabled = false; b.textContent = "Import";
     };
     f.querySelector(".nk").onclick = async () => {
       if (!confirm(`Issue a new gateway key for ${c.name}? The current key stops working straight away, so the site's Pi needs the new one.`)) return;

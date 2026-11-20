@@ -101,6 +101,15 @@ somewhere safe. If it's lost, **Manage → New gateway key** makes a new one (th
 The hosted service starts its history from the moment the gateway connects. The Pi keeps its own
 history as before.
 
+**Bringing the box's history across:** on the Pi's KenTrackIt page, **Settings → Download backup**
+saves an `avl.db` file. On `/hub`, **Manage** the company and choose that file under **History from a
+KenTrackIt box**, then **Import**. It adds the units, positions, calls, alerts, coverage, zones and the
+box's user accounts (they sign in with the passwords they already use; a username already taken on
+the service is skipped and listed). Only history from before the hosted data starts is added, so
+nothing is doubled and importing twice adds nothing. Recordings stay on the box. Cloudflare limits
+uploads to 100 MB, so for a bigger file open `/hub` on the server's own address
+(`http://<server address>:8100/hub`).
+
 ## 6. People sign in
 
 Everyone uses `https://track.asiltd.co.nz` (the usual sign-in page) or the phone app with that

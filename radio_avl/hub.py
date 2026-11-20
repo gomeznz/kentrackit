@@ -33,6 +33,7 @@ from urllib.parse import urlparse, quote, parse_qs
 
 from . import appdist
 from . import billing
+from . import importer
 from . import config as config_mod
 from .appdist import AppStore
 from .auth import Auth, AuthError, SUPPORT_USER, _h
@@ -48,6 +49,7 @@ HUB_COOKIE = "kt_hub"
 GATEWAY_OFFLINE_S = 45          # no word from a gateway for this long: its company's radio link shows down
 SUPPORT_SESSION_S = 4 * 3600
 MAX_GATEWAY_BODY = 8 * 1024 * 1024
+MAX_IMPORT = 4 * 1024 ** 3
 COMPANY_COMPONENTS_LOCKED = {"recording": {"enabled": False}, "console": {"enabled": False},
                              "lcd": {"enabled": False}, "polling": {"mode": "off"},
                              "uplink": {"enabled": False}}
@@ -465,6 +467,21 @@ class Hub:
             except Exception as e:
                 log.warning("hub housekeeping: %s", e)
 
+    # ---- history from a KenTrackIt box ---------------------------------------------------------------
+    def import_box(self, slug, path, actor):
+        app = self.companies.get(slug)
+        if not app:
+            raise HubError("Enable the company first")
+        try:
+            summary = importer.merge(app, path, lambda name: self.username_taken(name, app))
+        except importer.ImportError_ as e:
+            raise HubError(str(e))
+        text = importer.describe(summary)
+        app.store.add_event("audit", f"ASI ({actor}) imported history from a KenTrackIt box: {text}")
+        self.audit(actor, f"imported a box backup into {slug}: {text}")
+        app.broker.publish("units_changed", {})
+        return summary
+
     # ---- billing -------------------------------------------------------------------------------------
     def billing_cfg(self):
         with self.lock:
@@ -840,7 +857,7 @@ def make_hub_handler(hub):
                 return self._json({"title": hub.title(), "setup": hub.auth.needs_setup(), "version": hub.VERSION,
                                    "user": hub.auth.public(self.hub_user) if self.hub_user else None})
             body = {}
-            if method == "POST" and api != "/app/upload":
+            if method == "POST" and api != "/app/upload" and not api.endswith("/import"):
                 body = self._body()
                 if body is None:
                     return self._json({"error": "Bad request"}, 400)
@@ -881,6 +898,9 @@ def make_hub_handler(hub):
 
         def _hub_api(self, method, api, body, who):
             qs = parse_qs(urlparse(self.path).query)
+            mi = re.match(r"^/companies/([a-z0-9-]{2,30})/import$", api)
+            if mi and method == "POST":
+                return self._hub_import(mi.group(1), who)
             mb = re.match(r"^/companies/([a-z0-9-]{2,30})/rates(?:/(\d{1,9}))?$", api)
             if mb:
                 slug = mb.group(1)
@@ -968,6 +988,34 @@ def make_hub_handler(hub):
                                [st["plan_text"], " ".join(st["usage"]["radio_ids"])])
             name = f"kentrackit_billing_{month}.csv"
             self._send(200, out.getvalue(), "text/csv", {"Content-Disposition": f'attachment; filename="{name}"'})
+
+        def _hub_import(self, slug, who):
+            n = int(self.headers.get("Content-Length", 0) or 0)
+            if not 0 < n <= MAX_IMPORT:
+                return self._json({"error": "Choose the backup file from the box (avl.db, up to 4 GB)"}, 400)
+            tmp_dir = os.path.join(hub.data_dir, "tmp")
+            os.makedirs(tmp_dir, exist_ok=True)
+            path = os.path.join(tmp_dir, f"import-{slug}-{secrets.token_hex(6)}.db")
+            try:
+                got = 0
+                with open(path, "wb") as f:
+                    while got < n:
+                        chunk = self.rfile.read(min(1 << 20, n - got))
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        got += len(chunk)
+                if got != n:
+                    return self._json({"error": "The upload was cut short; try again"}, 400)
+                try:
+                    return self._json(dict(hub.import_box(slug, path, who), ok=True))
+                except HubError as e:
+                    return self._json({"error": str(e)}, 400)
+            finally:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
 
         def _hub_app_upload(self, who):
             n = int(self.headers.get("Content-Length", 0) or 0)

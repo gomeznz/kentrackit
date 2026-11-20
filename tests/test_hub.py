@@ -317,3 +317,74 @@ def test_reset_password_from_the_command_line():
     finally:
         hub.shutdown()
         srv.shutdown()
+
+
+def test_import_history_from_a_box():
+    import sqlite3
+    hub, srv, base, asi = make_hub()
+    try:
+        tok = add(asi, "Council", "council", "cadmin", "council123")
+        add(asi, "Acme", "acme", "aadmin", "acme12345")
+        # the box, with three weeks of history, its people and a zone
+        d = tempfile.mkdtemp()
+        box = App(config_mod.merge(config_mod.DEFAULTS, {"data_dir": d}), None, "replay")
+        box.auth.save_user({"username": "scott", "display_name": "Scott", "password": "scottpass1", "role": "admin"})
+        box.auth.save_user({"username": "aadmin", "password": "collides1", "role": "viewer"})
+        box.auth.save_user({"username": "cadmin", "password": "collides2", "role": "viewer"})
+        zid = box.store.save_geofence({"name": "Depot", "shape": "circle", "geometry": {"center": [-46.41, 168.35], "radius": 200},
+                                       "colour": "#2563eb", "alert_enter": 1, "alert_exit": 1, "active": 1})["id"]
+        old = time.time() - 21 * 86400
+        for i in range(30):
+            box.handle(frame("U00112" if i % 2 else "U00113", f"46{20 + i % 9:02d}.0000", i)[1:-1], old + i * 60)
+        with box.store.lock, box.store.db:
+            box.store.db.execute("UPDATE units SET alias='Truck 12' WHERE id='U00112'")
+            box.store.db.execute("INSERT INTO alerts (t, kind, severity, unit_id, geofence_id, detail) VALUES (?,?,?,?,?,?)",
+                                 (old + 100, "enter", "info", "U00112", zid, "entered Depot"))
+            box.store.db.execute("INSERT INTO transmissions (start, end, duration, kind, unit_id, audio) VALUES (?,?,?,?,?,?)",
+                                 (old + 200, old + 205, 5, "voice", "U00112", "voice/x.opus"))
+        bak = os.path.join(d, "backup.db")
+        src = sqlite3.connect(bak)
+        box.store.db.backup(src)
+        src.close()
+        # the hosted company already has today's data from the gateway
+        post_gw(base, tok, [[1, time.time(), frame("U00112", "4624.0000", 1).hex()]])
+        council = hub.app("council")
+        assert council.store.counts()["positions"] == 1
+
+        r = hub.import_box("council", bak, "alex")
+        assert r["positions"] == 30 and r["units_new"] == 1 and r["units_merged"] == 1
+        assert r["alerts"] == 1 and r["calls"] == 1 and r["zones_new"] == 1
+        with council.store.lock:
+            gid = council.store.db.execute("SELECT geofence_id FROM alerts").fetchone()[0]
+        assert [f["name"] for f in council.store.geofences() if f["id"] == gid] == ["Depot"]
+        assert r["users_new"] == ["scott"]
+        assert sorted(r["users_skipped"]) == ["aadmin (used by another company)", "cadmin (already in this company)"]
+        assert council.store.counts()["positions"] == 31
+        units = {u["id"]: u for u in council.store.units()}
+        assert units["U00112"]["alias"] == "Truck 12"
+        assert units["U00112"]["last_seen"] > time.time() - 60          # still today's position
+        with council.store.lock:
+            assert council.store.db.execute("SELECT audio FROM transmissions").fetchone()[0] is None
+        # the box's people sign in with the passwords they know
+        assert Client(base)("POST", "/api/login", {"username": "scott", "password": "scottpass1"})[0] == 200
+        # importing again adds nothing
+        r2 = hub.import_box("council", bak, "alex")
+        assert r2["positions"] == 0 and r2["alerts"] == 0 and r2["users_new"] == []
+        # not a backup
+        junk = os.path.join(d, "junk.db")
+        open(junk, "wb").write(b"hello")
+        try:
+            hub.import_box("council", junk, "alex")
+            assert False
+        except H.HubError as e:
+            assert "isn't a KenTrackIt backup" in str(e)
+        # through the page
+        with open(bak, "rb") as f:
+            raw = f.read()
+        req = urllib.request.Request(base + "/hub/api/companies/council/import", data=raw, method="POST",
+                                     headers={"Content-Type": "application/octet-stream", "Origin": base})
+        resp = asi.op.open(req)
+        assert json.loads(resp.read())["positions"] == 0
+    finally:
+        hub.shutdown()
+        srv.shutdown()
