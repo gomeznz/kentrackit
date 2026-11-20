@@ -131,7 +131,29 @@ To give a company `sdc.track.asiltd.co.nz`:
 That address shows the company's name on the sign-in page, and only that company's people can sign
 in there.
 
-## 8. Support, and switching a company off
+## 8. Status dashboard
+
+`/hub/dashboard` (the **Status dashboard** link at the top of `/hub`) is a dark, self-refreshing page
+for a screen in the office. For each company it shows:
+
+- **LIVE** (radio data in the last 5 min), **QUIET** (gateway and radio connected but nothing heard:
+  radios off), **RADIO DOWN** (gateway up, monitor radio not connected), **GATEWAY OFFLINE**,
+  **NOT CONNECTED** or **DISABLED**, with when radio data last arrived
+- radios heard in the last 15 minutes, packets a minute, positions today and open alerts
+- packets per minute over the last hour and positions per hour over the last 24 hours
+- gateway version and last contact, anything the gateway is still catching up on, calls today,
+  phones sharing, and the month's charges so far when the company has a rate
+
+Across the top are the service totals, and any open emergency shows as a red banner naming the
+company and unit. The bottom line is the server's own health: uptime, load, memory, disk and
+database size.
+
+For a wall screen that nobody signs in on, use **Wall display → Make a display link** on `/hub`.
+The link opens only the dashboard, can't change anything, and stops working when you make a new one
+or press **Turn off**. Press **F** (or the button) for full screen; the page keeps the screen awake
+where the browser allows it.
+
+## 9. Support, and switching a company off
 
 - **Open** (on `/hub`) signs you in to a company as `asi-support` for 4 hours, in a new tab. Every
   support session is written in that company's audit log. A company can refuse support access by
@@ -139,7 +161,7 @@ in there.
 - **Manage → Enabled** off: the company's people can't sign in and its gateway is refused.
   Nothing is deleted; tick it again to bring it back.
 
-## 9. Charging companies (optional)
+## 10. Charging companies (optional)
 
 A company is only charged once you give it a rate: **Manage → Charges** on `/hub`. A rate can combine:
 
@@ -166,7 +188,7 @@ used is kept on the service even if the company's own history is set to be kept 
 Each company's administrators see the same figures under **Settings → Billing**: their rate, any
 scheduled change, this month so far, and the past twelve months.
 
-## 10. Backups
+## 11. Backups
 
 Everything is in `/var/lib/kentrackit-hub`: `hub.db` (companies, ASI accounts) and
 `companies/<short name>/avl.db` (each company). A nightly copy:
@@ -187,7 +209,7 @@ sudo chmod +x /etc/cron.daily/kentrackit-hub-backup
 That keeps a week of daily copies. Copy `/var/backups/kentrackit-hub` off the server too (for example
 with Proxmox's own VM backups to another disk).
 
-## 11. Forgotten passwords
+## 12. Forgotten passwords
 
 Another ASI administrator can set a new one on `/hub → ASI administrators → Edit`. A company's own
 administrators reset their users' passwords in their Settings, and you can do it for them with **Open**.
@@ -203,7 +225,7 @@ For a company's user, add `--company <short name>`. It asks for the new password
 the account and signs it out everywhere. If sign-in then says "Too many failed attempts", run
 `sudo systemctl restart kentrackit-hub` to clear the lock.
 
-## 12. Updating
+## 13. Updating
 
 ```sh
 cd kentrackit && git pull && sudo ./install-hub.sh

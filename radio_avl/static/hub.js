@@ -343,6 +343,23 @@
     $("keybox").scrollIntoView({ behavior: "smooth", block: "center" });
   }
   $("kb-done").onclick = () => { $("keybox").hidden = true; $("kb-key").textContent = ""; };
+  // wall display link
+  async function loadDisplay() {
+    const r = await api("/display-key");
+    $("dk-st").textContent = r.on ? "On (anyone with the link can see the dashboard)" : "Off";
+    $("dk-off").hidden = !r.on;
+    $("dk-new").textContent = r.on ? "Make a new link" : "Make a display link";
+  }
+  $("dk-new").onclick = async () => {
+    try { const r = await post("/display-key"); $("dk-url").textContent = `${location.origin}/hub/dashboard?key=${r.key}`; $("dk-out").hidden = false; loadDisplay(); loadActivity(); }
+    catch (e) { toast(e.message, true); }
+  };
+  $("dk-off").onclick = async () => {
+    if (!confirm("Turn off the display link? Screens using it stop updating.")) return;
+    try { await api("/display-key", { method: "DELETE" }); $("dk-out").hidden = true; loadDisplay(); loadActivity(); } catch (e) { toast(e.message, true); }
+  };
+  loadDisplay().catch(() => {});
+
   for (const b of document.querySelectorAll("[data-copy]")) {
     b.onclick = async () => {
       try { await navigator.clipboard.writeText($(b.dataset.copy).textContent); toast("Copied"); }

@@ -206,7 +206,8 @@ users and settings. Each site's Pi becomes that company's **gateway**: under **S
 service** it sends the radio's data up with the company's gateway key, keeping it on disk while the
 internet is down. ASI adds companies, issues gateway keys, sets each company's rate (monthly fee,
 per radio, per user and per phone, with optional tiers and dated price changes), runs monthly
-statements with CSV export and opens support sessions at `/hub`.
+statements with CSV export and opens support sessions at `/hub`; `/hub/dashboard` is a status
+screen for the office wall (which companies are live, packets, positions, alerts, server health).
 
 Install it on a server or VM with `sudo ./install-hub.sh`, then follow [docs/hosted.md](docs/hosted.md)
 (Cloudflare address, first company, connecting a Pi, backups). Voice recording and talk-back still run

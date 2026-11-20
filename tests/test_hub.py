@@ -388,3 +388,34 @@ def test_import_history_from_a_box():
     finally:
         hub.shutdown()
         srv.shutdown()
+
+
+def test_status_dashboard():
+    hub, srv, base, asi = make_hub()
+    try:
+        t1 = add(asi, "Council", "council", "cadmin", "council123")
+        add(asi, "Acme", "acme", "aadmin", "acme12345")
+        hub.sample_packets()
+        post_gw(base, t1, [[1, time.time(), frame("U00112", "4624.0000", 1).hex()],
+                           [2, time.time(), frame("U00113", "4625.0000", 2, "224").hex()]])
+        hub.sample_packets()
+        anon = Client(base)
+        assert anon("GET", "/hub/api/dashboard")[0] == 401
+        assert anon("GET", "/hub/dashboard")[0] == 200                       # the page itself is just HTML
+        d = asi("GET", "/hub/api/dashboard")[1]
+        by = {c["slug"]: c for c in d["companies"]}
+        assert by["council"]["state"] == "live" and by["acme"]["state"] == "never"
+        assert by["council"]["heard_15m"] == 2 and by["council"]["packets_60m"][-1] == 2
+        assert by["council"]["emergencies"][0]["unit"] == "U00113"
+        assert d["totals"]["live"] == 1 and d["totals"]["companies"] == 2 and d["totals"]["emergencies"] == 1
+        assert sum(by["council"]["positions_hourly"]) == 2
+        # a display link opens it without signing in, and can be turned off
+        key = asi("POST", "/hub/api/display-key", {})[1]["key"]
+        assert anon("GET", "/hub/api/dashboard?key=" + key)[0] == 200
+        assert anon("GET", "/hub/api/dashboard?key=dk_wrong")[0] == 401
+        assert anon("GET", "/hub/api/companies?key=" + key)[0] == 401       # only the dashboard
+        assert asi("DELETE", "/hub/api/display-key")[0] == 200
+        assert anon("GET", "/hub/api/dashboard?key=" + key)[0] == 401
+    finally:
+        hub.shutdown()
+        srv.shutdown()

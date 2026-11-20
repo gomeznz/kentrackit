@@ -64,3 +64,5 @@ table.bill .to-date { color: var(--muted); font-weight: 400; font-size: 11.5px; 
 .tiers .tier .rng { min-width: 92px; color: var(--muted); }
 .item-head { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; margin-top: 8px; }
 .co .bill-line { color: var(--ink); }
+.dk-out { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.dk-out code { font-size: 12.5px; padding: 4px 6px; overflow-wrap: anywhere; user-select: all; flex: 1; }

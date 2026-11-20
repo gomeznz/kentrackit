@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/static/logo-mark.svg">
+<meta name="theme-color" content="#0a0f17">
+<title>KenTrackIt status</title>
+<link rel="stylesheet" href="/static/hub-dashboard.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="/static/logo-mark.svg" alt=""><span id="title">KenTrackIt</span><span class="sub">service status</span></div>
+  <div class="clock"><span id="clock">--:--</span><span id="date"></span></div>
+  <div class="tools">
+    <span id="updated" class="muted">connecting…</span>
+    <button type="button" id="fs" title="Full screen (F)">⛶ Full screen</button>
+    <a href="/hub" id="back" class="muted">← Admin</a>
+  </div>
+</header>
+
+<div id="emergency" class="emergency" role="alert" hidden></div>
+<div id="error" class="banner" hidden></div>
+
+<section class="tiles" id="tiles"></section>
+
+<section class="grid" id="grid"></section>
+
+<footer class="host" id="host"></footer>
+
+<script src="/static/hub-dashboard.js"></script>
+</body>
+</html>

@@ -36,7 +36,7 @@
 <div class="page" id="main" hidden>
   <header class="top">
     <h1 class="title-row"><img src="/static/logo-mark.svg" alt="" class="logo"><span id="h-title">KenTrackIt</span> service</h1>
-    <span class="me-link"><span id="h-me"></span> · <button type="button" class="link" id="signout">Sign out</button></span>
+    <span class="me-link"><a href="/hub/dashboard">Status dashboard</a> · <span id="h-me"></span> · <button type="button" class="link" id="signout">Sign out</button></span>
   </header>
   <div id="toast" class="toast" hidden></div>
 
@@ -121,6 +121,16 @@
     <p class="help">Map tiles are shared by every company and cached on this server.</p>
     <div class="actions"><button type="submit">Save</button></div>
   </form>
+
+  <section class="card">
+    <h2>Wall display</h2>
+    <p class="help">The <a href="/hub/dashboard">status dashboard</a> shows which companies are live, packets, positions,
+      alerts and the server's health, refreshing by itself. For a screen in the office, make a display link: it opens the
+      dashboard without signing in and can't change anything. Making a new link stops the old one.</p>
+    <div class="status-grid"><div><span class="k">Display link</span><span id="dk-st">–</span></div></div>
+    <div class="kv dk-out" id="dk-out" hidden><code id="dk-url"></code><button type="button" class="link" data-copy="dk-url">Copy</button></div>
+    <div class="actions"><button type="button" id="dk-off" class="danger" hidden>Turn off</button><button type="button" id="dk-new">Make a display link</button></div>
+  </section>
 
   <section class="card">
     <div class="card-head"><h2>ASI administrators</h2><button type="button" id="ad-add-btn">Add</button></div>

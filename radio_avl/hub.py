@@ -159,6 +159,10 @@ class Hub:
         self.cfg = self._load_cfg()
         self.tiles = (TileCache(self.cfg, self.data_dir), TileCache(self.cfg, self.data_dir, "sat"))
         self.app_store = AppStore(self.data_dir)
+        self.started = time.time()
+        self.samples = {}                            # slug -> deque of packets per minute (last 24 h)
+        self._frames_seen = {}
+        self._dash_cache = (0, None)
         for row in self.rows():
             if row["enabled"]:
                 self._start(row["slug"])
@@ -448,8 +452,14 @@ class Hub:
         return bool(g and g["online"] and not g.get("backlog"))
 
     def housekeeping(self):
-        last_billing = 0
+        last_billing, last_sample = 0, time.time()
         while not self.stop.wait(10):
+            if time.time() - last_sample >= 60:
+                last_sample += 60
+                try:
+                    self.sample_packets()
+                except Exception as e:
+                    log.warning("hub sampling: %s", e)
             if time.time() - last_billing > 900:
                 try:
                     self.billing_housekeeping()
@@ -641,6 +651,144 @@ class Hub:
                 p = self.db.execute("SELECT final FROM usage WHERE slug=? AND month=?", (r["slug"], prev)).fetchone()
             if p is not None and not p[0]:
                 self.update_usage(r["slug"], prev, final=True)
+
+    # ---- the status dashboard -----------------------------------------------------------------------
+    def sample_packets(self):
+        """Once a minute: how many radio packets each company's gateway delivered."""
+        import collections
+        for slug, app in list(self.companies.items()):
+            n = app.stats["frames"]
+            prev = self._frames_seen.get(slug)
+            self._frames_seen[slug] = n
+            dq = self.samples.setdefault(slug, collections.deque(maxlen=1440))
+            dq.append(max(0, n - prev) if prev is not None else 0)
+
+    def display_key_ok(self, key):
+        if not key:
+            return False
+        with self.lock:
+            r = self.db.execute("SELECT value FROM hub_settings WHERE key='display_key'").fetchone()
+        return bool(r and r[0] and secrets.compare_digest(r[0], _h(key)))
+
+    def set_display_key(self, on, actor):
+        key = ("dk_" + secrets.token_urlsafe(24)) if on else None
+        with self.lock, self.db:
+            self.db.execute("INSERT INTO hub_settings VALUES ('display_key', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                            (_h(key) if key else "",))
+        self.audit(actor, "made a new wall-display link (the old one stops working)" if on else "turned off the wall-display link")
+        return key
+
+    def has_display_key(self):
+        with self.lock:
+            r = self.db.execute("SELECT value FROM hub_settings WHERE key='display_key'").fetchone()
+        return bool(r and r[0])
+
+    @staticmethod
+    def _host_health(path):
+        import shutil
+        h = {"load": None, "mem_total": None, "mem_free": None, "disk_total": None, "disk_free": None}
+        try:
+            h["load"] = os.getloadavg()[0]
+            h["cpus"] = os.cpu_count()
+        except OSError:
+            pass
+        try:
+            mi = {}
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    k, v = line.split(":", 1)
+                    mi[k] = int(v.split()[0]) * 1024
+            h["mem_total"], h["mem_free"] = mi.get("MemTotal"), mi.get("MemAvailable")
+        except (OSError, ValueError):
+            pass
+        try:
+            du = shutil.disk_usage(path)
+            h["disk_total"], h["disk_free"] = du.total, du.free
+        except OSError:
+            pass
+        return h
+
+    def _company_dash(self, r, now, midnight):
+        slug = r["slug"]
+        app = self.companies.get(slug)
+        g = self.gateway_info(slug) or {}
+        c = {"slug": slug, "name": r["name"], "enabled": r["enabled"], "gateway": g}
+        if not app:
+            c["state"] = "disabled"
+            return c
+        last = app.stats.get("last_frame")
+        link_up = bool(app.stats["link_up"])
+        if not g.get("last"):
+            state = "never"
+        elif not g.get("online"):
+            state = "offline"
+        elif not link_up:
+            state = "no_radio"
+        elif last and now - last < 300:
+            state = "live"
+        else:
+            state = "quiet"
+        db, lock = app.store.db, app.store.lock
+        hour0 = now - 24 * 3600
+        with lock:
+            units_total = db.execute("SELECT COUNT(*) FROM units WHERE id NOT LIKE 'PH%'").fetchone()[0]
+            heard_15 = db.execute("SELECT COUNT(DISTINCT unit_id) FROM positions WHERE rx_time >= ? AND unit_id NOT LIKE 'PH%'",
+                                  (now - 900,)).fetchone()[0]
+            heard_today = db.execute("SELECT COUNT(DISTINCT unit_id) FROM positions WHERE rx_time >= ? AND unit_id NOT LIKE 'PH%'",
+                                     (midnight,)).fetchone()[0]
+            pos_today = db.execute("SELECT COUNT(*) FROM positions WHERE rx_time >= ?", (midnight,)).fetchone()[0]
+            calls_today = db.execute("SELECT COUNT(*) FROM transmissions WHERE start >= ? AND kind='voice'",
+                                     (midnight,)).fetchone()[0]
+            phones = db.execute("SELECT COUNT(DISTINCT unit_id) FROM positions WHERE rx_time >= ? AND unit_id LIKE 'PH%'",
+                                (now - 900,)).fetchone()[0]
+            hourly = dict(db.execute("SELECT CAST((rx_time - ?) / 3600 AS INTEGER) h, COUNT(*) FROM positions "
+                                     "WHERE rx_time >= ? GROUP BY h", (hour0, hour0)).fetchall())
+            open_alerts = db.execute("SELECT severity, COUNT(*) FROM alerts WHERE ack_time IS NULL GROUP BY severity").fetchall()
+            emerg = [dict(unit=u, t=t, alias=a or "") for u, t, a in db.execute(
+                "SELECT a.unit_id, a.t, u.alias FROM alerts a LEFT JOIN units u ON u.id=a.unit_id "
+                "WHERE a.ack_time IS NULL AND a.kind='emergency' ORDER BY a.t DESC LIMIT 5")]
+        per_min = list(self.samples.get(slug, []))
+        c.update(state=state, last_frame=last, link_detail=app.stats["link_detail"],
+                 units_total=units_total, heard_15m=heard_15, heard_today=heard_today, phones_15m=phones,
+                 positions_today=pos_today, calls_today=calls_today,
+                 positions_hourly=[hourly.get(i, 0) for i in range(24)],
+                 packets_60m=per_min[-60:], packets_24h=sum(per_min), packets_rate=round(sum(per_min[-5:]) / 5, 1) if per_min else 0,
+                 alerts={k: n for k, n in open_alerts}, emergencies=emerg)
+        st = self.statement(slug, billing.month_of(now), refresh=False)
+        if st["plan"]:
+            c["billing"] = {"to_date": st["total"], "currency": st["currency"]}
+        return c
+
+    def dashboard(self):
+        now = time.time()
+        t, cached = self._dash_cache
+        if cached and now - t < 4:
+            return cached
+        midnight = time.mktime(time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1))
+        comps = [self._company_dash(r, now, midnight) for r in self.rows()]
+        active = [c for c in comps if c["state"] != "disabled"]
+        data_bytes = 0
+        for root, _, files in os.walk(self.data_dir):
+            data_bytes += sum(os.path.getsize(os.path.join(root, f)) for f in files if f.endswith(".db"))
+        out = {
+            "now": now, "title": self.title(), "version": self.VERSION, "started": self.started,
+            "sampled_since": self.started, "companies": comps,
+            "totals": {
+                "companies": len(active),
+                "live": sum(1 for c in active if c["state"] == "live"),
+                "gateways_online": sum(1 for c in active if c["gateway"].get("online")),
+                "heard_15m": sum(c.get("heard_15m", 0) for c in active),
+                "units": sum(c.get("units_total", 0) for c in active),
+                "packets_rate": round(sum(c.get("packets_rate", 0) for c in active), 1),
+                "positions_today": sum(c.get("positions_today", 0) for c in active),
+                "calls_today": sum(c.get("calls_today", 0) for c in active),
+                "emergencies": sum(len(c.get("emergencies", [])) for c in active),
+                "alerts_open": sum(sum(c.get("alerts", {}).values()) for c in active),
+            },
+            "host": dict(self._host_health(self.data_dir), data_bytes=data_bytes),
+        }
+        self._dash_cache = (now, out)
+        return out
 
     # ---- overview for ASI ------------------------------------------------------------------------
     def overview(self):
@@ -850,6 +998,11 @@ def make_hub_handler(hub):
             self.hub_user = hub.auth.session_user(self._hub_token())
             if method == "GET" and p in STATIC_HUB:
                 return self._static("hub.html")
+            if method == "GET" and p in ("/hub/dashboard", "/hub/dashboard/"):
+                return self._static("hub-dashboard.html")
+            if method == "GET" and p == "/hub/api/dashboard" and (
+                    self.hub_user or hub.display_key_ok(parse_qs(urlparse(self.path).query).get("key", [""])[0])):
+                return self._json(hub.dashboard())
             if not p.startswith("/hub/api/"):
                 return self._send(404, "Not found", "text/plain")
             api = p[len("/hub/api"):]
@@ -922,6 +1075,13 @@ def make_hub_handler(hub):
                     return self._billing_csv(month, sts)
                 return self._json({"month": month, "current": billing.month_of(time.time()),
                                    "statements": sts, **hub.billing_cfg()})
+            if api == "/display-key":
+                if method == "POST":
+                    return self._json({"key": hub.set_display_key(True, who)})
+                if method == "DELETE":
+                    hub.set_display_key(False, who)
+                    return self._json({"ok": True})
+                return self._json({"on": hub.has_display_key()})
             if api == "/billing/settings":
                 if method == "POST":
                     return self._json(hub.set_billing_cfg(body, who))
