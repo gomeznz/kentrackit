@@ -178,7 +178,23 @@ sudo chmod +x /etc/cron.daily/kentrackit-hub-backup
 That keeps a week of daily copies. Copy `/var/backups/kentrackit-hub` off the server too (for example
 with Proxmox's own VM backups to another disk).
 
-## 11. Updating
+## 11. Forgotten passwords
+
+Another ASI administrator can set a new one on `/hub → ASI administrators → Edit`. A company's own
+administrators reset their users' passwords in their Settings, and you can do it for them with **Open**.
+
+If nobody can sign in, reset it on the server itself:
+
+```sh
+cd /opt/kentrackit-hub
+sudo -u kentrackit-hub python3 -m radio_avl.hub --data /var/lib/kentrackit-hub --reset-password alex
+```
+
+For a company's user, add `--company <short name>`. It asks for the new password twice, re-enables
+the account and signs it out everywhere. If sign-in then says "Too many failed attempts", run
+`sudo systemctl restart kentrackit-hub` to clear the lock.
+
+## 12. Updating
 
 ```sh
 cd kentrackit && git pull && sudo ./install-hub.sh

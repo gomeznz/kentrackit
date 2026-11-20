@@ -298,3 +298,22 @@ def test_graduated_tiers():
     assert billing.statement(None, {"radios": 5})["total"] == 0
     s = billing.statement(billing.validate_plan({"radio": [{"price": 0.333}]}), {"radios": 3}, 15)
     assert s["subtotal"] == 0.99 and s["gst"] == 0.15
+
+
+def test_reset_password_from_the_command_line():
+    from radio_avl.auth import reset_password
+    hub, srv, base, asi = make_hub()
+    try:
+        add(asi, "Council", "council", "cadmin", "council123")
+        out = []
+        assert reset_password(os.path.join(hub.data_dir, "hub.db"), "ALEX", "brand-new-pw", out.append) == 0
+        assert Client(base)("POST", "/hub/api/login", {"username": "alex", "password": "brand-new-pw"})[0] == 200
+        assert asi("GET", "/hub/api/companies")[0] == 401                # signed out everywhere
+        db = os.path.join(hub.data_dir, "companies", "council", "avl.db")
+        assert reset_password(db, "cadmin", "council-new", out.append) == 0
+        assert Client(base)("POST", "/api/login", {"username": "cadmin", "password": "council-new"})[0] == 200
+        assert reset_password(db, "nobody", "whatever12", out.append) == 1 and "cadmin" in out[-1]
+        assert reset_password(db, "cadmin", "short", out.append) == 1
+    finally:
+        hub.shutdown()
+        srv.shutdown()

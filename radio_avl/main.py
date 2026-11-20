@@ -376,8 +376,13 @@ def main(argv=None):
     ap.add_argument("--replay", help="replay a raw_*.log capture instead of the serial port")
     ap.add_argument("--speed", type=float, default=0,
                     help="replay speed multiplier (0 = as fast as possible)")
+    ap.add_argument("--reset-password", metavar="USERNAME", help="set a new password for a user and exit")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
+    if a.reset_password:
+        from .auth import reset_password
+        cfg = config_mod.load(a.config)
+        return reset_password(os.path.join(cfg["data_dir"], "avl.db"), a.reset_password, service="radio-avl")
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
 

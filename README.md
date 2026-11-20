@@ -187,6 +187,18 @@ To announce an update: add a release at the top of `radio_avl/whatsnew.json` and
 `radio_avl/main.py` to match. Items with `"perm": "settings"` (or `listen`, `reports`...) only show to
 users who can use that feature. A brand-new user only sees the latest release, not the whole history.
 
+## Forgotten password
+
+On the Pi, set a new one for any user (it re-enables the account and signs it out everywhere):
+
+```sh
+cd /opt/radio-avl
+sudo -u radio-avl python3 -m radio_avl --config /etc/radio-avl/config.json --reset-password alex
+```
+
+If sign-in then says "Too many failed attempts", `sudo systemctl restart radio-avl` clears the lock.
+The hosted service has the same command; see [docs/hosted.md](docs/hosted.md).
+
 ## Hosted service (many companies on one server)
 
 `radio_avl/hub.py` runs KenTrackIt for many companies on one server, each with its own database,

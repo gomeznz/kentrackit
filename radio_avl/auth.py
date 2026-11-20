@@ -330,3 +330,50 @@ class Auth:
     def sees(user, unit_id):
         """Can this user see this unit? Alerts with no unit (unit_id None) are visible to all."""
         return unit_id is None or user["units"] is None or unit_id in user["units"]
+
+
+# ---- password reset from the command line (for whoever can log in to the server) -------------
+def reset_password(db_path, username, password=None, out=print, service=None):
+    """Set a new password for a user straight in the database, when nobody can sign in to do it.
+    Also re-enables the account and signs it out everywhere. Returns 0 on success."""
+    import getpass
+    import os as _os
+    from .store import Store
+
+    if not _os.path.exists(db_path):
+        out(f"No database at {db_path}")
+        return 1
+
+    class _Core:
+        cfg = {"web": {"password_hash": ""}}
+
+        def __init__(self):
+            self.store = Store(db_path)
+
+        @staticmethod
+        def now():
+            return time.time()
+
+    auth = Auth(_Core())
+    u = next((x for x in auth.users() if x["username"].lower() == str(username).lower()), None)
+    if not u:
+        names = ", ".join(x["username"] for x in auth.users()) or "(none)"
+        out(f"No user called {username}. Users here: {names}")
+        return 1
+    if password is None:
+        password = getpass.getpass(f"New password for {u['username']}: ")
+        if getpass.getpass("Again: ") != password:
+            out("The two passwords don't match; nothing changed.")
+            return 1
+    try:
+        auth.save_user({"password": password, "enabled": True}, u["id"])
+    except AuthError as e:
+        out(str(e))
+        return 1
+    with auth.lock, auth.db:
+        auth.db.execute("DELETE FROM sessions WHERE user_id=?", (u["id"],))
+    auth.audit(u, "password reset from the server's command line")
+    out(f"Done: {u['username']} has a new password and is signed out everywhere.")
+    if service:
+        out(f"If it says 'Too many failed attempts' when signing in, run: sudo systemctl restart {service}")
+    return 0

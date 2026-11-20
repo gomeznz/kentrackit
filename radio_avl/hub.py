@@ -1002,8 +1002,16 @@ def main(argv=None):
     ap.add_argument("--data", default="hub-data", help="folder for the service's data (made if missing)")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8090)
+    ap.add_argument("--reset-password", metavar="USERNAME",
+                    help="set a new password for an ASI administrator (or, with --company, a company's user) and exit")
+    ap.add_argument("--company", metavar="SHORT_NAME", help="with --reset-password: the company the user belongs to")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
+    if a.reset_password:
+        from .auth import reset_password
+        db = (os.path.join(a.data, "companies", a.company, "avl.db") if a.company
+              else os.path.join(a.data, "hub.db"))
+        return reset_password(db, a.reset_password, service="kentrackit-hub")
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
     hub = Hub(a.data, a.host, a.port)
