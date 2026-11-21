@@ -69,11 +69,16 @@ final class SettingsViewController: UITableViewController {
         case .others:
             c.text = "Other alerts"
             c.secondaryText = "Overdue units, speeding, zones and other warnings."
-            cell.accessoryView = toggle(p.otherAlerts) { on in p.otherAlerts = on }
+            cell.accessoryView = toggle(p.otherAlerts) { on in
+                p.otherAlerts = on
+                PushToken.shared.upload(force: true)
+            }
             cell.selectionStyle = .none
         case .notifyNote:
-            c.secondaryText = "Alerts arrive while KenTrackIt is open, or with the screen off while it's sharing this "
-                + "phone's location. Alerts with the app fully closed come with the App Store version."
+            c.secondaryText = Prefs.shared.pushActive
+                ? "Emergencies arrive even with KenTrackIt closed. Allow notifications for KenTrackIt in the iPhone's Settings."
+                : "Alerts arrive while KenTrackIt is open, or with the screen off while it's sharing this phone's location. "
+                + "With the app closed too, once your KenTrackIt server has iPhone alerts set up."
             cell.selectionStyle = .none
         case .test:
             c.text = "Test the alarm"

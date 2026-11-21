@@ -98,7 +98,11 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
                 return
             }
             let p = Prefs.shared
-            if !Urls.sameHost(p.server, url) { p.sharing = false }
+            if !Urls.sameHost(p.server, url) {
+                await PushToken.shared.remove()          // the old server stops sending this phone alerts
+                p.sharing = false
+                p.pushActive = false
+            }
             p.server = url
             LocationSharing.shared.sync()
             Alarm.shared.requestPermission()

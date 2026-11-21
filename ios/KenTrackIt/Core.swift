@@ -26,6 +26,11 @@ final class Prefs {
         get { d.object(forKey: "other_alerts") as? Bool ?? true }
         set { d.set(newValue, forKey: "other_alerts") }
     }
+    /// The server sends alerts through Apple too, so the live stream doesn't post its own notifications.
+    var pushActive: Bool {
+        get { d.bool(forKey: "push_active") }
+        set { d.set(newValue, forKey: "push_active") }
+    }
     var intervalS: Int {
         get { let v = d.integer(forKey: "interval_s"); return v > 0 ? v : 15 }
         set { d.set(newValue, forKey: "interval_s") }

@@ -27,9 +27,27 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         SceneDelegate.current?.showStart()
     }
 
-    // show alerts while the app is open, too
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        PushToken.shared.set(deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        // e.g. built without a team that has push; alerts still come while the app runs
+        print("KenTrackIt: push registration failed: \(error.localizedDescription)")
+    }
+
+    // an alert while the app is open: an emergency rings on screen as well
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        let info = notification.request.content.userInfo
+        if let id = info["alert_id"] as? Int {
+            if info["ack"] as? Bool == true {
+                Alarm.shared.acknowledged(id: id)
+            } else if notification.request.content.threadIdentifier == "emergency" {
+                Alarm.shared.raise(id: id, title: notification.request.content.title,
+                                   text: notification.request.content.body, notify: false)
+            }
+        }
         completionHandler([.banner, .list, .sound])
     }
 

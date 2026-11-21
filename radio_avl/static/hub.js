@@ -343,6 +343,37 @@
     $("keybox").scrollIntoView({ behavior: "smooth", block: "center" });
   }
   $("kb-done").onclick = () => { $("keybox").hidden = true; $("kb-key").textContent = ""; };
+  // iPhone push key
+  let hpKey = "";
+  async function loadPush() {
+    const p = await api("/push");
+    $("hp-kid").value = p.key_id; $("hp-team").value = p.team_id; $("hp-bundle").value = p.bundle_id; $("hp-crit").checked = p.critical;
+    $("hp-st").textContent = !p.available ? "Not available: install python3-httpx, python3-h2 and python3-cryptography"
+      : !p.key_set ? "No Apple key yet" : p.critical ? "Ready (Critical Alerts)" : "Ready";
+    $("hp-phones").textContent = p.phones;
+    $("hp-last").textContent = p.last_ok ? when(p.last_ok) : "never";
+    $("hp-err").textContent = p.last_error || "none";
+    $("hp-rm").hidden = !p.key_set;
+    hpKey = ""; $("hp-file").value = "";
+  }
+  $("hp-file").onchange = async () => {
+    const f = $("hp-file").files[0];
+    hpKey = f ? await f.text() : "";
+    const m = f && f.name.match(/AuthKey_([A-Z0-9]{10})\.p8$/i);
+    if (m && !$("hp-kid").value) $("hp-kid").value = m[1].toUpperCase();
+  };
+  $("push-form").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const body = { key_id: $("hp-kid").value.trim(), team_id: $("hp-team").value.trim(), bundle_id: $("hp-bundle").value.trim(), critical: $("hp-crit").checked };
+    if (hpKey) body.key = hpKey;
+    try { await post("/push", body); toast("Saved"); loadPush(); loadActivity(); } catch (e) { toast(e.message, true); }
+  };
+  $("hp-rm").onclick = async () => {
+    if (!confirm("Remove the Apple push key? iPhones stop getting alerts with the app closed.")) return;
+    try { await post("/push", { remove_key: true }); loadPush(); loadActivity(); } catch (e) { toast(e.message, true); }
+  };
+  loadPush().catch(() => {});
+
   // wall display link
   async function loadDisplay() {
     const r = await api("/display-key");

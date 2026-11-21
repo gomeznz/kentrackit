@@ -122,6 +122,29 @@
     <div class="actions"><button type="submit">Save</button></div>
   </form>
 
+  <form class="card" id="push-form" autocomplete="off">
+    <h2>iPhone alerts</h2>
+    <p class="help">One Apple push key for every company, so emergencies reach the KenTrackIt iPhone app with the app
+      closed. In ASI's Apple developer account: <b>Certificates, Identifiers &amp; Profiles → Keys → +</b>, tick
+      <b>Apple Push Notifications service</b>, download the <code>AuthKey_….p8</code> file (only once) and choose it here.
+      The Team ID is under <b>Membership</b>.</p>
+    <label>Apple push key (.p8) <input type="file" id="hp-file" accept=".p8"></label>
+    <div class="two">
+      <label>Key ID <input id="hp-kid" maxlength="10" spellcheck="false"></label>
+      <label>Team ID <input id="hp-team" maxlength="10" spellcheck="false"></label>
+    </div>
+    <label>App bundle ID <input id="hp-bundle" spellcheck="false"></label>
+    <label class="check"><input type="checkbox" id="hp-crit"> Critical Alerts (only once Apple has approved them for the app)</label>
+    <div class="status-grid">
+      <div><span class="k">Status</span><span id="hp-st">–</span></div>
+      <div><span class="k">iPhones signed in</span><span id="hp-phones">–</span></div>
+      <div><span class="k">Last sent</span><span id="hp-last">–</span></div>
+      <div><span class="k">Problem</span><span id="hp-err">none</span></div>
+    </div>
+    <p class="help">Each company's administrators can send a test to their own iPhone from their Settings.</p>
+    <div class="actions"><button type="button" id="hp-rm" class="danger" hidden>Remove key</button><button type="submit">Save</button></div>
+  </form>
+
   <section class="card">
     <h2>Wall display</h2>
     <p class="help">The <a href="/hub/dashboard">status dashboard</a> shows which companies are live, packets, positions,

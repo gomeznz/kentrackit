@@ -11,6 +11,7 @@
 		2A0CD27550EA2BB330E1B9A6 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC673807234C68F4C4B24D04 /* SceneDelegate.swift */; };
 		203EB7E79977CE60C5A0B292 /* Core.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD755B8C1E0644263751B130 /* Core.swift */; };
 		ED7571C633C5CB2BC4B975E8 /* Alerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ADA480163A84EF879A71042 /* Alerts.swift */; };
+		0838A86D8957DA11CA087E71 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 810A45996CC92AC41C1B6157 /* Push.swift */; };
 		294E43EBCBA970F336F24C00 /* LocationSharing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE4CEC13EC27427F43370640 /* LocationSharing.swift */; };
 		5FF6EDF3CD6A998BA73D803F /* WebViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9155F8640BB9C82C824D680F /* WebViewController.swift */; };
 		DF70B09A7C371D9E51E8AA4E /* SetupViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78A494EFD4749D2AB4DBC320 /* SetupViewController.swift */; };
@@ -25,6 +26,7 @@
 		CC673807234C68F4C4B24D04 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		FD755B8C1E0644263751B130 /* Core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core.swift; sourceTree = "<group>"; };
 		7ADA480163A84EF879A71042 /* Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alerts.swift; sourceTree = "<group>"; };
+		810A45996CC92AC41C1B6157 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
 		AE4CEC13EC27427F43370640 /* LocationSharing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSharing.swift; sourceTree = "<group>"; };
 		9155F8640BB9C82C824D680F /* WebViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewController.swift; sourceTree = "<group>"; };
 		78A494EFD4749D2AB4DBC320 /* SetupViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupViewController.swift; sourceTree = "<group>"; };
@@ -32,6 +34,7 @@
 		77083F8A86567BB26CAEFF11 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B47B6A71B52DD7A6BE896195 /* alarm.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm.wav; sourceTree = "<group>"; };
 		399D0FEC7E1065D061E1CBAC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BFF946A0DC64A38CAB19D643 /* KenTrackIt.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KenTrackIt.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,6 +63,7 @@
 				CC673807234C68F4C4B24D04 /* SceneDelegate.swift */,
 				FD755B8C1E0644263751B130 /* Core.swift */,
 				7ADA480163A84EF879A71042 /* Alerts.swift */,
+				810A45996CC92AC41C1B6157 /* Push.swift */,
 				AE4CEC13EC27427F43370640 /* LocationSharing.swift */,
 				9155F8640BB9C82C824D680F /* WebViewController.swift */,
 				78A494EFD4749D2AB4DBC320 /* SetupViewController.swift */,
@@ -67,6 +71,7 @@
 				77083F8A86567BB26CAEFF11 /* Assets.xcassets */,
 				B47B6A71B52DD7A6BE896195 /* alarm.wav */,
 				399D0FEC7E1065D061E1CBAC /* Info.plist */,
+				BFF946A0DC64A38CAB19D643 /* KenTrackIt.entitlements */,
 			);
 			path = KenTrackIt;
 			sourceTree = "<group>";
@@ -153,6 +158,7 @@
 				2A0CD27550EA2BB330E1B9A6 /* SceneDelegate.swift in Sources */,
 				203EB7E79977CE60C5A0B292 /* Core.swift in Sources */,
 				ED7571C633C5CB2BC4B975E8 /* Alerts.swift in Sources */,
+				0838A86D8957DA11CA087E71 /* Push.swift in Sources */,
 				294E43EBCBA970F336F24C00 /* LocationSharing.swift in Sources */,
 				5FF6EDF3CD6A998BA73D803F /* WebViewController.swift in Sources */,
 				DF70B09A7C371D9E51E8AA4E /* SetupViewController.swift in Sources */,
@@ -210,8 +216,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
+				CODE_SIGN_ENTITLEMENTS = KenTrackIt/KenTrackIt.entitlements;
 				ENABLE_PREVIEWS = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = KenTrackIt/Info.plist;
@@ -233,8 +240,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
+				CODE_SIGN_ENTITLEMENTS = KenTrackIt/KenTrackIt.entitlements;
 				ENABLE_PREVIEWS = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = KenTrackIt/Info.plist;

@@ -27,6 +27,7 @@ from .poller import Poller
 from .recorder import Recorder
 from .voice import VoiceRecorder
 from .store import Store
+from .push import Apns, PushService
 from .uplink import Uplink
 from .web import Broker, TileCache, serve, rebind
 
@@ -35,7 +36,7 @@ log = logging.getLogger("radio-avl")
 class App:
     VERSION = "0.11"
 
-    def __init__(self, cfg, config_path=None, mode="serial", hub=None, slug=None, tiles=None, app_store=None):
+    def __init__(self, cfg, config_path=None, mode="serial", hub=None, slug=None, tiles=None, app_store=None, apns=None):
         self.cfg = cfg
         self.config_path = config_path
         self.mode = mode
@@ -57,6 +58,8 @@ class App:
         self.app_store = app_store or AppStore(cfg["data_dir"])
         self.talk = Talk(self)
         self.uplink = None if self.hosted else Uplink(self)
+        self.apns = apns or Apns(lambda: self.cfg["push"])     # hosted: one Apple key for every company
+        self.push = PushService(self, self.apns)
         self.channel.load_last_voice()
         self.ser = None
         self.ser_lock = threading.Lock()
@@ -401,6 +404,7 @@ def main(argv=None):
     threading.Thread(target=app.panel.run, daemon=True, name="lcd").start()
     threading.Thread(target=app.talk.run, daemon=True, name="talk").start()
     threading.Thread(target=app.uplink.run, daemon=True, name="uplink").start()
+    threading.Thread(target=app.push.run, daemon=True, name="push").start()
 
     signal.signal(signal.SIGTERM, lambda *_: app.stop.set())
     try:

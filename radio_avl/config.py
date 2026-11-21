@@ -52,6 +52,8 @@ DEFAULTS = {
                 "sip_auth_user": "", "sip_auth_password": "", "sip_register": False, "sip_codec": "PCMU",
                 "sip_hold_s": 8, "sip_inbound": True},
     "mobile": {"tracking": True, "interval_s": 15},
+    # iPhone alerts through Apple (see push.py); the key is a secret, never shown again
+    "push": {"key_id": "", "team_id": "", "bundle_id": "nz.co.asiltd.kentrackit", "key": "", "critical": False},
     # this Pi as the gateway for a company on the hosted KenTrackIt service
     "uplink": {"enabled": False, "url": "", "token": ""},
     "lcd": {"enabled": False, "bus": 1, "address": 0x27, "cols": 20, "rows": 4, "backlight": "auto",
@@ -180,6 +182,7 @@ def public(cfg):
     out["tiles"]["linz_key"] = ""
     out["console"]["sip_password_set"] = bool(out["console"].pop("sip_auth_password", ""))
     out["uplink"]["token_set"] = bool(out["uplink"].pop("token", ""))
+    out["push"]["key_set"] = bool(out["push"].pop("key", ""))
     return out
 
 
@@ -202,7 +205,7 @@ def _num(v, lo, hi, name, integer=False):
 
 # On the hosted service the radio, sound cards, display and web server belong to the site's Pi
 # (the gateway) or to ASI, so a company's administrators can't change them.
-HOSTED_LOCKED = ("serial", "lcd", "console", "recording", "polling", "tiles", "uplink")
+HOSTED_LOCKED = ("serial", "lcd", "console", "recording", "polling", "tiles", "uplink", "push")
 
 
 def apply_patch(cfg, patch, hosted=False):
@@ -448,6 +451,20 @@ def apply_patch(cfg, patch, hosted=False):
             new["mobile"]["tracking"] = bool(mo["tracking"])
         if "interval_s" in mo:
             new["mobile"]["interval_s"] = _num(mo["interval_s"], 5, 600, "Phone report interval", True)
+
+    pu = patch.get("push")
+    if pu is not None:
+        from . import push as push_mod
+        merged = dict(new["push"])
+        merged.update({k: v for k, v in pu.items() if k != "key"})
+        if pu.get("key"):
+            merged["key"] = pu["key"]
+        if pu.get("remove_key"):
+            merged["key"] = ""
+        try:
+            new["push"] = push_mod.check_config(merged)
+        except push_mod.PushError as e:
+            raise Invalid(str(e))
 
     up = patch.get("uplink")
     if up is not None:

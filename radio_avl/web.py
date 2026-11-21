@@ -653,6 +653,8 @@ def make_handler(app):
 
             if p == "/api/settings":
                 return self._json(dict(config_mod.public(cfg), hosted=app.hosted)) if self._need("settings") else None
+            if p == "/api/push":
+                return self._json(app.push.status())
             if p == "/api/billing":
                 if not self._need("settings"):
                     return
@@ -715,6 +717,24 @@ def make_handler(app):
                     return self._json({"error": "lat and lon expected"}, 400)
                 uid = app.phone_position(self.user, body, app.now())
                 return self._json({"ok": True, "unit": uid, "interval_s": app.cfg["mobile"]["interval_s"]})
+            if p == "/api/mobile/push-token":
+                # an iPhone signed in as this user: alerts go to it until this sign-in ends
+                from .push import PushError
+                try:
+                    if body.get("remove"):
+                        app.push.unregister(body.get("token", ""))
+                    else:
+                        app.push.register(self.user, self._token(), body.get("token"), body.get("env"),
+                                          body.get("platform", "ios"), body.get("other_alerts", True))
+                except PushError as e:
+                    return self._json({"error": str(e)}, 400)
+                return self._json({"ok": True, "push": app.push.apns.configured()})
+            if p == "/api/push/test":
+                from .push import PushError
+                try:
+                    return self._json({"ok": True, "results": app.push.test(self.user)})
+                except PushError as e:
+                    return self._json({"error": str(e)}, 400)
             if p == "/api/mobile/sharing":
                 uid = app.phone_unit(self.user)
                 on = bool(body.get("on"))

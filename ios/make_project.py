@@ -6,12 +6,14 @@ import hashlib
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SOURCES = ["AppDelegate.swift", "SceneDelegate.swift", "Core.swift", "Alerts.swift", "LocationSharing.swift",
+SOURCES = ["AppDelegate.swift", "SceneDelegate.swift", "Core.swift", "Alerts.swift", "Push.swift", "LocationSharing.swift",
            "WebViewController.swift", "SetupViewController.swift", "SettingsViewController.swift"]
 RESOURCES = [("Assets.xcassets", "folder.assetcatalog"), ("alarm.wav", "audio.wav")]
 BUNDLE_ID = "nz.co.asiltd.kentrackit"
 MARKETING_VERSION = "1.0"
-BUILD = "2"
+BUILD = "3"
+# ASI's Apple Team ID (Membership page on developer.apple.com); empty = choose a team in Xcode
+TEAM_ID = ""
 
 
 def oid(name):
@@ -24,6 +26,7 @@ def main():
     PCL, TCL = oid("project.configlist"), oid("target.configlist")
     PD, PR, TD, TR = oid("proj.debug"), oid("proj.release"), oid("tgt.debug"), oid("tgt.release")
     PLIST = oid("ref.Info.plist")
+    ENT = oid("ref.KenTrackIt.entitlements")
     o = []
     w = o.append
     w("// !$*UTF8*$!\n{\n\tarchiveVersion = 1;\n\tclasses = {\n\t};\n\tobjectVersion = 56;\n\tobjects = {\n")
@@ -40,6 +43,7 @@ def main():
     for f, t in RESOURCES:
         w(f"\t\t{oid('ref.' + f)} /* {f} */ = {{isa = PBXFileReference; lastKnownFileType = {t}; path = {f}; sourceTree = \"<group>\"; }};\n")
     w(f"\t\t{PLIST} /* Info.plist */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = \"<group>\"; }};\n")
+    w(f"\t\t{ENT} /* KenTrackIt.entitlements */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KenTrackIt.entitlements; sourceTree = \"<group>\"; }};\n")
     w("/* End PBXFileReference section */\n\n/* Begin PBXFrameworksBuildPhase section */\n")
     w(f"\t\t{FW} /* Frameworks */ = {{\n\t\t\tisa = PBXFrameworksBuildPhase;\n\t\t\tbuildActionMask = 2147483647;\n"
       f"\t\t\tfiles = (\n\t\t\t);\n\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t}};\n")
@@ -49,6 +53,7 @@ def main():
     kids = "".join(f"\t\t\t\t{oid('ref.' + f)} /* {f} */,\n" for f in SOURCES)
     kids += "".join(f"\t\t\t\t{oid('ref.' + f)} /* {f} */,\n" for f, _ in RESOURCES)
     kids += f"\t\t\t\t{PLIST} /* Info.plist */,\n"
+    kids += f"\t\t\t\t{ENT} /* KenTrackIt.entitlements */,\n"
     w(f"\t\t{APPG} /* KenTrackIt */ = {{\n\t\t\tisa = PBXGroup;\n\t\t\tchildren = (\n{kids}\t\t\t);\n"
       f"\t\t\tpath = KenTrackIt;\n\t\t\tsourceTree = \"<group>\";\n\t\t}};\n")
     w(f"\t\t{PRODG} /* Products */ = {{\n\t\t\tisa = PBXGroup;\n\t\t\tchildren = (\n\t\t\t\t{APP} /* KenTrackIt.app */,\n"
@@ -86,7 +91,8 @@ def main():
     prelease = dict(common, DEBUG_INFORMATION_FORMAT='"dwarf-with-dsym"', ENABLE_NS_ASSERTIONS="NO",
                     SWIFT_COMPILATION_MODE="wholemodule", VALIDATE_PRODUCT="YES", MTL_ENABLE_DEBUG_INFO="NO")
     tgt = {"ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon", "CODE_SIGN_STYLE": "Automatic",
-           "CURRENT_PROJECT_VERSION": BUILD, "DEVELOPMENT_TEAM": '""', "ENABLE_PREVIEWS": "NO",
+           "CURRENT_PROJECT_VERSION": BUILD, "DEVELOPMENT_TEAM": TEAM_ID or '""',
+           "CODE_SIGN_ENTITLEMENTS": "KenTrackIt/KenTrackIt.entitlements", "ENABLE_PREVIEWS": "NO",
            "GENERATE_INFOPLIST_FILE": "NO", "INFOPLIST_FILE": "KenTrackIt/Info.plist",
            "LD_RUNPATH_SEARCH_PATHS": '(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t"@executable_path/Frameworks",\n\t\t\t\t)',
            "MARKETING_VERSION": MARKETING_VERSION, "PRODUCT_BUNDLE_IDENTIFIER": BUNDLE_ID,

@@ -5,7 +5,7 @@
 set -e
 [ "$(id -u)" = 0 ] || { echo "Run with sudo"; exit 1; }
 
-apt-get install -y python3 python3-numpy iproute2 sqlite3 >/dev/null
+apt-get install -y python3 python3-numpy python3-httpx python3-h2 python3-cryptography iproute2 sqlite3 >/dev/null
 
 id kentrackit-hub >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin kentrackit-hub
 mkdir -p /opt/kentrackit-hub /var/lib/kentrackit-hub

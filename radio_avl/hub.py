@@ -34,6 +34,8 @@ from urllib.parse import urlparse, quote, parse_qs
 from . import appdist
 from . import billing
 from . import importer
+from . import push as push_mod
+from .push import Apns
 from . import config as config_mod
 from .appdist import AppStore
 from .auth import Auth, AuthError, SUPPORT_USER, _h
@@ -159,6 +161,7 @@ class Hub:
         self.cfg = self._load_cfg()
         self.tiles = (TileCache(self.cfg, self.data_dir), TileCache(self.cfg, self.data_dir, "sat"))
         self.app_store = AppStore(self.data_dir)
+        self.apns = Apns(self.push_cfg)              # one Apple push key for every company
         self.started = time.time()
         self.samples = {}                            # slug -> deque of packets per minute (last 24 h)
         self._frames_seen = {}
@@ -229,13 +232,14 @@ class Hub:
             for section, vals in COMPANY_COMPONENTS_LOCKED.items():
                 cfg[section].update(vals)
             app = self.App(cfg, path, mode="hosted", hub=self, slug=slug, tiles=self.tiles,
-                           app_store=self.app_store)
+                           app_store=self.app_store, apns=self.apns)
             app.link(False, "gateway not connected yet")
             row = self.row(slug)
             if row and row["gw_last"] and time.time() - row["gw_last"] < GATEWAY_OFFLINE_S:
                 link = row["gw_info"].get("link") or {}
                 app.link(bool(link.get("up")), link.get("detail") or "")
             threading.Thread(target=app.housekeeping, daemon=True, name=f"hk:{slug}").start()
+            threading.Thread(target=app.push.run, daemon=True, name=f"push:{slug}").start()
             self.companies[slug] = app
             self.company_locks[slug] = threading.Lock()
             log.info("company %s started", slug)
@@ -476,6 +480,37 @@ class Hub:
                         app.store.add_event("gateway", "gateway offline (no contact for %d s)" % GATEWAY_OFFLINE_S)
             except Exception as e:
                 log.warning("hub housekeeping: %s", e)
+
+    # ---- iPhone push (one Apple key for the whole service) --------------------------------------------
+    def push_cfg(self):
+        with self.lock:
+            r = self.db.execute("SELECT value FROM hub_settings WHERE key='push'").fetchone()
+        return dict(push_mod.DEFAULTS, **(json.loads(r[0]) if r else {}))
+
+    def set_push_cfg(self, data, actor):
+        cur = self.push_cfg()
+        merged = dict(cur)
+        merged.update({k: v for k, v in data.items() if k in push_mod.DEFAULTS and k != "key"})
+        if data.get("key"):
+            merged["key"] = data["key"]
+        if data.get("remove_key"):
+            merged["key"] = ""
+        try:
+            new = push_mod.check_config(merged)
+        except push_mod.PushError as e:
+            raise HubError(str(e))
+        with self.lock, self.db:
+            self.db.execute("INSERT INTO hub_settings VALUES ('push', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                            (json.dumps(new),))
+        self.audit(actor, "changed the iPhone push settings" + (" (new key)" if data.get("key") else ""))
+        return self.push_public()
+
+    def push_public(self):
+        c = self.push_cfg()
+        phones = sum(app.push.status()["phones"] for app in list(self.companies.values()))
+        return {"key_id": c["key_id"], "team_id": c["team_id"], "bundle_id": c["bundle_id"], "critical": c["critical"],
+                "key_set": bool(c["key"]), "available": push_mod.available(), "phones": phones,
+                "last_ok": self.apns.last_ok, "last_error": self.apns.last_error}
 
     # ---- history from a KenTrackIt box ---------------------------------------------------------------
     def import_box(self, slug, path, actor):
@@ -1075,6 +1110,10 @@ def make_hub_handler(hub):
                     return self._billing_csv(month, sts)
                 return self._json({"month": month, "current": billing.month_of(time.time()),
                                    "statements": sts, **hub.billing_cfg()})
+            if api == "/push":
+                if method == "POST":
+                    return self._json(hub.set_push_cfg(body, who))
+                return self._json(hub.push_public())
             if api == "/display-key":
                 if method == "POST":
                     return self._json({"key": hub.set_display_key(True, who)})

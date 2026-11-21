@@ -7,6 +7,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private var web: WKWebView!
     private let userContent = WKUserContentController()
     private var downloadURL: URL?
+    private var lastPath: String?
 
     override func loadView() {
         let cfg = WKWebViewConfiguration()
@@ -112,8 +113,12 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        // just signed in, perhaps: the alert stream can connect now
-        if let u = webView.url?.path, !u.hasPrefix("/login") { AlertWatcher.shared.sync() }
+        // just signed in, perhaps: the alert stream can connect, and this phone can register for alerts
+        if let u = webView.url?.path, !u.hasPrefix("/login") {
+            AlertWatcher.shared.sync()
+            PushToken.shared.upload(force: lastPath?.hasPrefix("/login") ?? false)
+        }
+        lastPath = webView.url?.path
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {

@@ -223,6 +223,46 @@
       $("mo-rm").hidden = !i.available; $("mo-dl").hidden = !i.available;
     } catch (e) { $("mo-apk").textContent = e.message; }
   }
+  // ---- iPhone alerts ------------------------------------------------------------------------
+  let pushKey = "";
+  function fillPush() {
+    const P = S.push;
+    if (P) {
+      $("pu-kid").value = P.key_id; $("pu-team").value = P.team_id; $("pu-bundle").value = P.bundle_id;
+      $("pu-crit").checked = P.critical; $("pu-rm").hidden = !P.key_set; pushKey = ""; $("pu-file").value = "";
+    }
+    loadPush();
+  }
+  async function loadPush() {
+    let st;
+    try { st = await api("/api/push"); } catch (e) { return; }
+    $("pu-st").textContent = !st.available ? "Not available: install python3-httpx, python3-h2 and python3-cryptography"
+      : !st.configured ? (S.hosted ? "Not set up on this service yet" : "No Apple key yet")
+      : st.critical ? "Ready (Critical Alerts)" : "Ready";
+    $("pu-st").className = st.available && st.configured ? "ok-text" : "";
+    $("pu-phones").textContent = st.phones;
+    $("pu-last").textContent = st.last_ok ? new Date(st.last_ok * 1000).toLocaleString() : "never";
+    $("pu-err").textContent = st.last_error || "none";
+  }
+  $("pu-file").onchange = async () => {
+    const f = $("pu-file").files[0];
+    pushKey = f ? await f.text() : "";
+    const m = f && f.name.match(/AuthKey_([A-Z0-9]{10})\.p8$/i);
+    if (m && !$("pu-kid").value) $("pu-kid").value = m[1].toUpperCase();     // Apple names the file after the key
+  };
+  $("pu-rm").onclick = async () => {
+    if (!confirm("Remove the Apple push key? iPhones stop getting alerts with the app closed.")) return;
+    try { const r = await post("/api/settings", { push: { remove_key: true } }); S = r.settings; fillPush(); toast("Key removed"); }
+    catch (e) { toast(e.message, true); }
+  };
+  $("pu-test").onclick = async () => {
+    $("pu-test").disabled = true;
+    try { const r = await api("/api/push/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+          toast(`Test: ${r.results.join(", ")}`); loadPush(); }
+    catch (e) { toast(e.message, true); }
+    $("pu-test").disabled = false;
+  };
+
   function fillMobile() { $("mo-track").checked = S.mobile.tracking; $("mo-int").value = S.mobile.interval_s; loadApk(); }
   $("mo-up").onclick = async () => {
     const f = $("mo-file").files[0];
@@ -445,6 +485,12 @@
       if ($("up-key").value.trim()) u.token = $("up-key").value.trim();
       return { uplink: u };
     },
+    push: () => {
+      const p = { key_id: $("pu-kid").value.trim(), team_id: $("pu-team").value.trim(), bundle_id: $("pu-bundle").value.trim(),
+                  critical: $("pu-crit").checked };
+      if (pushKey) p.key = pushKey;
+      return { push: p };
+    },
     mobile: () => ({ mobile: { tracking: $("mo-track").checked, interval_s: +$("mo-int").value } }),
     lcd: () => ({ lcd: { enabled: $("lcd-on").checked, bus: +$("lcd-bus").value, address: $("lcd-addr").value.trim(),
       size: $("lcd-size").value, backlight: $("lcd-bl").value, rotate_s: +$("lcd-rot").value,
@@ -476,6 +522,7 @@
           return;
         }
         if (section === "map") setTimeout(() => location.reload(), 800);
+        if (section === "push") fillPush();
         if (section === "console") { loadConsole(); setTimeout(loadConsole, 1200); }
         fillAll();
       } catch (e) {
@@ -632,7 +679,7 @@
   setInterval(() => { if (!$("cap-stop").hidden) loadCaptures(); }, 5000);
 
   // ---- load ----------------------------------------------------------------------
-  function fillAll() { document.body.classList.toggle("hosted", !!S.hosted); fillUplink(); fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillVoice(); fillConsole(); fillMobile(); fillLcd(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
+  function fillAll() { document.body.classList.toggle("hosted", !!S.hosted); fillUplink(); fillSerial(); fillWeb(); fillMap(); fillDisplay(); fillVoice(); fillConsole(); fillMobile(); fillPush(); fillLcd(); fillPolling(); fillAlerts(); fillData(); fillStatus(); }
   async function refresh() {
     try { SYS = await api("/api/system"); fillStatus(); } catch (e) { /* offline briefly */ }
   }

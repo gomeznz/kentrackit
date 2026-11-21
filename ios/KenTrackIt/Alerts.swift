@@ -96,13 +96,21 @@ final class Alarm {
     private var stopTimer: Timer?
     private weak var screen: AlarmViewController?
 
+    /// Asks to show alerts, then registers with Apple for push alerts.
     func requestPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge, .criticalAlert]) { ok, _ in
+            if ok { DispatchQueue.main.async { UIApplication.shared.registerForRemoteNotifications() } }
+        }
     }
 
-    func raise(id: Int, title: String, text: String) {
+    /// From the live stream or a push that arrived while the app is open. notify: also post a
+    /// notification (not needed when Apple has already delivered one).
+    func raise(id: Int, title: String, text: String, notify post: Bool = true) {
+        if id != 0 && active.contains(id) { return }      // already ringing for this one
         active.insert(id)
-        notify(id: id, title: title, text: text, critical: true)
+        if post && !(Prefs.shared.pushActive && UIApplication.shared.applicationState != .active) {
+            notify(id: id, title: title, text: text, critical: true)
+        }
         if UIApplication.shared.applicationState == .active {
             startSound()
             showScreen(title: title, text: text)

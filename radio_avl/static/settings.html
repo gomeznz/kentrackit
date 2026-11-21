@@ -449,6 +449,35 @@
     </div>
   </form>
 
+  <!-- iPhone alerts through Apple -->
+  <form class="card" data-section="push" id="push-card">
+    <h2>iPhone alerts</h2>
+    <p class="help">Emergencies reach the KenTrackIt iPhone app through Apple, even with the app closed. Phones register
+      themselves when they sign in; an alert only goes to phones still signed in, and only for units that user can see.</p>
+    <p class="help hosted-only">ASI looks after the Apple key for this service. Use the test to check your own iPhone.</p>
+    <div class="box-only">
+      <p class="help">From ASI's Apple developer account: <b>Certificates, Identifiers &amp; Profiles → Keys → +</b>,
+        tick <b>Apple Push Notifications service</b>, download the <code>AuthKey_….p8</code> file (Apple only lets you
+        download it once) and choose it here with its Key ID. The Team ID is under <b>Membership</b>.</p>
+      <label>Apple push key (.p8) <input type="file" id="pu-file" accept=".p8"></label>
+      <div class="two">
+        <label>Key ID <input id="pu-kid" maxlength="10" autocomplete="off" spellcheck="false" placeholder="10 characters"></label>
+        <label>Team ID <input id="pu-team" maxlength="10" autocomplete="off" spellcheck="false" placeholder="10 characters"></label>
+      </div>
+      <label>App bundle ID <input id="pu-bundle" autocomplete="off" spellcheck="false"></label>
+      <label class="check"><input type="checkbox" id="pu-crit"> Critical Alerts: emergencies sound even on silent and Do Not Disturb
+        <span class="hint">Only once Apple has approved Critical Alerts for the app; until then they're time-sensitive alerts.</span></label>
+    </div>
+    <div class="status-grid">
+      <div><span class="k">Status</span><span id="pu-st">–</span></div>
+      <div><span class="k">iPhones signed in</span><span id="pu-phones">–</span></div>
+      <div><span class="k">Last sent</span><span id="pu-last">–</span></div>
+      <div><span class="k">Problem</span><span id="pu-err">none</span></div>
+    </div>
+    <div class="actions"><button type="button" id="pu-rm" class="danger box-only" hidden>Remove key</button>
+      <button type="button" id="pu-test">Send a test to my iPhone</button><button type="submit" class="box-only">Save</button></div>
+  </form>
+
   <!-- Front-panel LCD -->
   <form class="card box-only" data-section="lcd" id="lcd-card">
     <h2>Front-panel display</h2>
