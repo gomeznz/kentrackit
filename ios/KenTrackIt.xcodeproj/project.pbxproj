@@ -1,0 +1,274 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		6ECCDF006942D13A918B89DD /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2402ADDF86B2D72F9EFF817 /* AppDelegate.swift */; };
+		203EB7E79977CE60C5A0B292 /* Core.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD755B8C1E0644263751B130 /* Core.swift */; };
+		ED7571C633C5CB2BC4B975E8 /* Alerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ADA480163A84EF879A71042 /* Alerts.swift */; };
+		294E43EBCBA970F336F24C00 /* LocationSharing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE4CEC13EC27427F43370640 /* LocationSharing.swift */; };
+		5FF6EDF3CD6A998BA73D803F /* WebViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9155F8640BB9C82C824D680F /* WebViewController.swift */; };
+		DF70B09A7C371D9E51E8AA4E /* SetupViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78A494EFD4749D2AB4DBC320 /* SetupViewController.swift */; };
+		CF8F2EF4D2D47DCEBD75B0F3 /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DDA89D002A6271C97CAEF57 /* SettingsViewController.swift */; };
+		B1E3D6A7B0FF22BD01EB91E2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 77083F8A86567BB26CAEFF11 /* Assets.xcassets */; };
+		C0155E31637D175A97BFE9B5 /* alarm.wav in Resources */ = {isa = PBXBuildFile; fileRef = B47B6A71B52DD7A6BE896195 /* alarm.wav */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		7F6D01D6546BCD07518D8398 /* KenTrackIt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KenTrackIt.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F2402ADDF86B2D72F9EFF817 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		FD755B8C1E0644263751B130 /* Core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core.swift; sourceTree = "<group>"; };
+		7ADA480163A84EF879A71042 /* Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alerts.swift; sourceTree = "<group>"; };
+		AE4CEC13EC27427F43370640 /* LocationSharing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSharing.swift; sourceTree = "<group>"; };
+		9155F8640BB9C82C824D680F /* WebViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewController.swift; sourceTree = "<group>"; };
+		78A494EFD4749D2AB4DBC320 /* SetupViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupViewController.swift; sourceTree = "<group>"; };
+		9DDA89D002A6271C97CAEF57 /* SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewController.swift; sourceTree = "<group>"; };
+		77083F8A86567BB26CAEFF11 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B47B6A71B52DD7A6BE896195 /* alarm.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm.wav; sourceTree = "<group>"; };
+		399D0FEC7E1065D061E1CBAC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3806DEFC96CD30D22C0E71FE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2B731CEFC6751AAE0EC69B98 = {
+			isa = PBXGroup;
+			children = (
+				20F4BD606C0F6D1645AE4919 /* KenTrackIt */,
+				86024CAD1E83101D97359D73 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		20F4BD606C0F6D1645AE4919 /* KenTrackIt */ = {
+			isa = PBXGroup;
+			children = (
+				F2402ADDF86B2D72F9EFF817 /* AppDelegate.swift */,
+				FD755B8C1E0644263751B130 /* Core.swift */,
+				7ADA480163A84EF879A71042 /* Alerts.swift */,
+				AE4CEC13EC27427F43370640 /* LocationSharing.swift */,
+				9155F8640BB9C82C824D680F /* WebViewController.swift */,
+				78A494EFD4749D2AB4DBC320 /* SetupViewController.swift */,
+				9DDA89D002A6271C97CAEF57 /* SettingsViewController.swift */,
+				77083F8A86567BB26CAEFF11 /* Assets.xcassets */,
+				B47B6A71B52DD7A6BE896195 /* alarm.wav */,
+				399D0FEC7E1065D061E1CBAC /* Info.plist */,
+			);
+			path = KenTrackIt;
+			sourceTree = "<group>";
+		};
+		86024CAD1E83101D97359D73 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				7F6D01D6546BCD07518D8398 /* KenTrackIt.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		42AEFBAE01D2DFD981F7DA7D /* KenTrackIt */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6D2F3F0C466A0EC0B2062AA7 /* Build configuration list for PBXNativeTarget "KenTrackIt" */;
+			buildPhases = (
+				DBAEDAAE674BE07D23447E75 /* Sources */,
+				3806DEFC96CD30D22C0E71FE /* Frameworks */,
+				B098093DFB498EF325D85EDF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KenTrackIt;
+			productName = KenTrackIt;
+			productReference = 7F6D01D6546BCD07518D8398 /* KenTrackIt.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		46F86FAA6BBF9AC94A7E4595 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					42AEFBAE01D2DFD981F7DA7D = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = CDC8A1029C4F3E06784CCFF1 /* Build configuration list for PBXProject "KenTrackIt" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 2B731CEFC6751AAE0EC69B98;
+			productRefGroup = 86024CAD1E83101D97359D73 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				42AEFBAE01D2DFD981F7DA7D /* KenTrackIt */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B098093DFB498EF325D85EDF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1E3D6A7B0FF22BD01EB91E2 /* Assets.xcassets in Resources */,
+				C0155E31637D175A97BFE9B5 /* alarm.wav in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		DBAEDAAE674BE07D23447E75 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6ECCDF006942D13A918B89DD /* AppDelegate.swift in Sources */,
+				203EB7E79977CE60C5A0B292 /* Core.swift in Sources */,
+				ED7571C633C5CB2BC4B975E8 /* Alerts.swift in Sources */,
+				294E43EBCBA970F336F24C00 /* LocationSharing.swift in Sources */,
+				5FF6EDF3CD6A998BA73D803F /* WebViewController.swift in Sources */,
+				DF70B09A7C371D9E51E8AA4E /* SetupViewController.swift in Sources */,
+				CF8F2EF4D2D47DCEBD75B0F3 /* SettingsViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		4257995D5FEB097455192277 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+			};
+			name = Debug;
+		};
+		CE7A3CB3B7BB14CB7E72BBF7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+			};
+			name = Release;
+		};
+		A3F61B41957AEA1EFA63EB05 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = KenTrackIt/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = nz.co.asiltd.kentrackit;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		FF8312F936D3A28646D453F8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = KenTrackIt/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = nz.co.asiltd.kentrackit;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CDC8A1029C4F3E06784CCFF1 /* Build configuration list for PBXProject "KenTrackIt" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4257995D5FEB097455192277 /* Debug */,
+				CE7A3CB3B7BB14CB7E72BBF7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6D2F3F0C466A0EC0B2062AA7 /* Build configuration list for PBXNativeTarget "KenTrackIt" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A3F61B41957AEA1EFA63EB05 /* Debug */,
+				FF8312F936D3A28646D453F8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 46F86FAA6BBF9AC94A7E4595 /* Project object */;
+}

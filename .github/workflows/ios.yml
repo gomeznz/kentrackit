@@ -1,0 +1,44 @@
+name: iOS app
+
+on:
+  push:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # to publish the build log when a build fails
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode version
+        run: xcodebuild -version
+      # Builds for the simulator without signing: proves it compiles. Running it on a phone is
+      # done from Xcode on the Mac (Signing & Capabilities -> your team).
+      - name: Build for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/KenTrackIt.xcodeproj -scheme KenTrackIt -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log
+      - name: Package the simulator app
+        run: |
+          cd build/Build/Products/Debug-iphonesimulator && zip -qr "$GITHUB_WORKSPACE/KenTrackIt-simulator.zip" KenTrackIt.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KenTrackIt-simulator
+          path: KenTrackIt-simulator.zip
+      - name: Publish the build log
+        if: failure() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          grep -E "error:|warning: .*(deprecated|will be an error)|\*\* BUILD" build.log > ios-build.log || cp build.log ios-build.log
+          echo "-----" >> ios-build.log; tail -200 build.log >> ios-build.log
+          gh release delete ios-build-log --yes --cleanup-tag || true
+          gh release create ios-build-log ios-build.log --prerelease --target "$GITHUB_SHA" \
+            --title "KenTrackIt iOS: failed build log" --notes "Log of the failed iOS build ${GITHUB_RUN_NUMBER}."
