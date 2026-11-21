@@ -199,6 +199,26 @@ sudo -u radio-avl python3 -m radio_avl --config /etc/radio-avl/config.json --res
 If sign-in then says "Too many failed attempts", `sudo systemctl restart radio-avl` clears the lock.
 The hosted service has the same command; see [docs/hosted.md](docs/hosted.md).
 
+## iPhone app (testing)
+
+`ios/` is the KenTrackIt app for iPhone (iOS 16 or later): the KenTrackIt pages, phone location
+sharing, emergency alerts with a full-screen alarm, and talking on the Dispatch page (over `https://`).
+It runs in the simulator or on your own iPhone with a free Apple ID; no developer account needed yet.
+
+1. On the Mac: `git clone https://github.com/gomeznz/kentrackit.git`, then open
+   `ios/KenTrackIt.xcodeproj` in Xcode.
+2. **Simulator:** pick an iPhone at the top of the window and press **Run** (▶).
+3. **Your iPhone:** Xcode → Settings → Accounts → add your Apple ID. Then select the **KenTrackIt**
+   target → **Signing & Capabilities** → Team: *your name (Personal Team)*. If it says the bundle
+   identifier is taken, change it to something of your own (e.g. `nz.co.asiltd.kentrackit.alex`).
+   Plug the phone in, turn on **Developer Mode** on it (Settings → Privacy & Security), choose it at
+   the top of Xcode and press **Run**. The first time, trust the developer on the phone: Settings →
+   General → VPN & Device Management. Builds signed this way last 7 days; press Run again to renew.
+
+Until ASI has an Apple Developer account, alerts arrive while the app is open, or with the screen
+off while it's sharing the phone's location (choose **Always** for location). With the account come
+push alerts with the app closed, Critical Alerts that sound on silent, and TestFlight.
+
 ## Hosted service (many companies on one server)
 
 `radio_avl/hub.py` runs KenTrackIt for many companies on one server, each with its own database,
