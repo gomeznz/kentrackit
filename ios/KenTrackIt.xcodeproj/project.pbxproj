@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		6ECCDF006942D13A918B89DD /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2402ADDF86B2D72F9EFF817 /* AppDelegate.swift */; };
+		2A0CD27550EA2BB330E1B9A6 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC673807234C68F4C4B24D04 /* SceneDelegate.swift */; };
 		203EB7E79977CE60C5A0B292 /* Core.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD755B8C1E0644263751B130 /* Core.swift */; };
 		ED7571C633C5CB2BC4B975E8 /* Alerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ADA480163A84EF879A71042 /* Alerts.swift */; };
 		294E43EBCBA970F336F24C00 /* LocationSharing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE4CEC13EC27427F43370640 /* LocationSharing.swift */; };
@@ -21,6 +22,7 @@
 /* Begin PBXFileReference section */
 		7F6D01D6546BCD07518D8398 /* KenTrackIt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KenTrackIt.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2402ADDF86B2D72F9EFF817 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		CC673807234C68F4C4B24D04 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		FD755B8C1E0644263751B130 /* Core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core.swift; sourceTree = "<group>"; };
 		7ADA480163A84EF879A71042 /* Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alerts.swift; sourceTree = "<group>"; };
 		AE4CEC13EC27427F43370640 /* LocationSharing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSharing.swift; sourceTree = "<group>"; };
@@ -55,6 +57,7 @@
 			isa = PBXGroup;
 			children = (
 				F2402ADDF86B2D72F9EFF817 /* AppDelegate.swift */,
+				CC673807234C68F4C4B24D04 /* SceneDelegate.swift */,
 				FD755B8C1E0644263751B130 /* Core.swift */,
 				7ADA480163A84EF879A71042 /* Alerts.swift */,
 				AE4CEC13EC27427F43370640 /* LocationSharing.swift */,
@@ -147,6 +150,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6ECCDF006942D13A918B89DD /* AppDelegate.swift in Sources */,
+				2A0CD27550EA2BB330E1B9A6 /* SceneDelegate.swift in Sources */,
 				203EB7E79977CE60C5A0B292 /* Core.swift in Sources */,
 				ED7571C633C5CB2BC4B975E8 /* Alerts.swift in Sources */,
 				294E43EBCBA970F336F24C00 /* LocationSharing.swift in Sources */,
@@ -206,7 +210,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = NO;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -229,7 +233,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = NO;
 				GENERATE_INFOPLIST_FILE = NO;

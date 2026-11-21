@@ -15,8 +15,12 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Xcode version
-        run: xcodebuild -version
+      # the newest Xcode on the runner, so the build sees what a current Mac sees
+      - name: Use the newest Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)
+          sudo xcode-select -s "$X"
+          xcodebuild -version
       # Builds for the simulator without signing: proves it compiles. Running it on a phone is
       # done from Xcode on the Mac (Signing & Capabilities -> your team).
       - name: Build for the simulator

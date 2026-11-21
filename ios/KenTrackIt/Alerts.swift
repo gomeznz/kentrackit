@@ -234,7 +234,7 @@ final class AlarmViewController: UIViewController {
 extension UIApplication {
     func topViewController() -> UIViewController? {
         var top = connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?.rootViewController
-            ?? (delegate as? AppDelegate)?.window?.rootViewController
+            ?? SceneDelegate.current?.window?.rootViewController
         while let p = top?.presentedViewController { top = p }
         return top
     }
