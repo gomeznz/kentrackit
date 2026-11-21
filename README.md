@@ -215,9 +215,25 @@ It runs in the simulator or on your own iPhone with a free Apple ID; no develope
    the top of Xcode and press **Run**. The first time, trust the developer on the phone: Settings →
    General → VPN & Device Management. Builds signed this way last 7 days; press Run again to renew.
 
-Until ASI has an Apple Developer account, alerts arrive while the app is open, or with the screen
-off while it's sharing the phone's location (choose **Always** for location). With the account come
-push alerts with the app closed, Critical Alerts that sound on silent, and TestFlight.
+**Alerts with the app closed (Apple push).** With ASI's Apple Developer account:
+
+1. In Xcode, **Signing & Capabilities** → Team: *Advanced Systems Integration 2022 Limited*. The
+   project already asks for Push Notifications; Xcode registers the app ID for you.
+2. On developer.apple.com → **Certificates, Identifiers & Profiles → Keys → +**: name it
+   "KenTrackIt push", tick **Apple Push Notifications service (APNs)**, continue, register, and
+   **download** the `AuthKey_XXXXXXXXXX.p8` file (Apple only allows this once; keep it safe).
+3. Upload it with its Key ID and ASI's Team ID (Membership page): on a box in **Settings → iPhone
+   alerts**, on the hosted service in **/hub → iPhone alerts** (one key for every company).
+4. On the iPhone, sign in to KenTrackIt and allow notifications, then press **Send a test to my
+   iPhone** in Settings. Close the app and try again: the test still arrives.
+
+Builds run from Xcode use Apple's test (sandbox) push service; TestFlight and App Store builds use
+the real one. The server handles both. **Critical Alerts** (sound on silent and through Do Not
+Disturb) need Apple's approval: request it at developer.apple.com/contact/request/notifications-critical-alerts-entitlement,
+then tick *Critical Alerts* in the push settings once it's granted.
+
+Without push set up, alerts arrive while the app is open, or with the screen off while it's sharing
+the phone's location (choose **Always** for location).
 
 ## Hosted service (many companies on one server)
 
